@@ -21,15 +21,17 @@ def automl_set_dataset_schema(
   gcp_region: str,
   display_name: str,
   target_col_name: str,
-  schema_info: dict = {},  # dict with col name as key, type as value
+  schema_info: str = '{}',  # dict with key of col name, value an array with [type, nullable]
   time_col_name: str = None,
   test_train_col_name: str = None,
   api_endpoint: str = None,
 ) -> NamedTuple('Outputs', [('display_name', str)]):
   import sys
   import subprocess
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
+  import json
   import google
   import logging
   from google.api_core.client_options import ClientOptions
@@ -39,13 +41,16 @@ def automl_set_dataset_schema(
                          dataset_display_name,
                          column_spec_display_name,
                          type_code,
-                         nullable=None):
+                         nullable=None
+                         ):
 
-      logging.info("Setting {} to type {}".format(column_spec_display_name, type_code))
+      logging.info("Setting {} to type {} and nullable {}".format(
+          column_spec_display_name, type_code, nullable))
       response = client.update_column_spec(
           dataset_display_name=dataset_display_name,
           column_spec_display_name=column_spec_display_name,
-          type_code=type_code, nullable=nullable
+          type_code=type_code,
+          nullable=nullable
       )
 
       # synchronous check of operation status.
@@ -82,10 +87,11 @@ def automl_set_dataset_schema(
   else:
     client = automl.TablesClient(project=gcp_project_id, region=gcp_region)
 
-  # Update any cols for which the desired schema was not inferred.
-  if schema_info:
-    for k,v in schema_info.items():
-      update_column_spec(client, display_name, k, v)
+  schema_dict = json.loads(schema_info)
+  # Update cols for which the desired schema was not inferred.
+  if schema_dict:
+    for k,v in schema_dict.items():
+      update_column_spec(client, display_name, k, v[0], nullable=v[1])
 
   # Update the dataset with info about the target col, plus optionally info on how to split on
   # a time col or a test/train col.
@@ -98,9 +104,13 @@ def automl_set_dataset_schema(
 
 
 # if __name__ == "__main__":
-#   sdict = {"end_station_id": "CATEGORY", "start_station_id":"CATEGORY", "loc_cross": "CATEGORY", "bike_id": "CATEGORY"}
-#   automl_set_dataset_schema('aju-vtests2', 'us-central1', 'component_test1',
-#     'duration', sdict)
+#   import json
+# #   sdict = {"end_station_id": "CATEGORY", "start_station_id":"CATEGORY", "loc_cross": "CATEGORY", "bike_id": "CATEGORY"}
+#   sdict = {"accepted_answer_id": ["CATEGORY", True], "id": ["CATEGORY", True], "last_editor_display_name": ["CATEGORY", True], "last_editor_user_id": ["CATEGORY", True],
+#     "owner_display_name": ["CATEGORY", True], "owner_user_id": ["CATEGORY", True],
+#     "parent_id": ["CATEGORY", True], "post_type_id": ["CATEGORY", True], "tags": ["CATEGORY", True]}
+#   automl_set_dataset_schema('aju-vtests2', 'us-central1', 'so_test1',
+#     't1', json.dumps(sdict))
 
 
 if __name__ == '__main__':

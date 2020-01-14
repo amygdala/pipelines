@@ -17,7 +17,15 @@ import kfp.dsl as dsl
 import kfp.gcp as gcp
 import kfp.components as comp
 from kfp.dsl.types import GCSPath, String, Dict
+import json
 import time
+
+# DEFAULT_SCHEMA = json.dumps({"end_station_id": ["CATEGORY", True], "start_station_id": ["CATEGORY", True],
+#   "loc_cross": ["CATEGORY", True], "bike_id": ["CATEGORY", True]})
+DEFAULT_SCHEMA = json.dumps({"accepted_answer_id": ["CATEGORY", True], "id": ["CATEGORY", True],
+    "last_editor_display_name": ["CATEGORY", True], "last_editor_user_id": ["CATEGORY", True],
+    "owner_display_name": ["CATEGORY", True], "owner_user_id": ["CATEGORY", True],
+    "parent_id": ["CATEGORY", True], "post_type_id": ["CATEGORY", True], "tags": ["CATEGORY", True]})
 
 
 create_dataset_op = comp.load_component_from_file(
@@ -51,16 +59,21 @@ def automl_tables(  #pylint: disable=unused-argument
   time_col_name: String = '',
   # test_train_col_name: String = '',
  # schema dict with col name as key, type as value
-  schema_info: Dict = {"end_station_id": "CATEGORY", "start_station_id": "CATEGORY", "loc_cross": "CATEGORY", "bike_id": "CATEGORY"},
+  schema_info: String = DEFAULT_SCHEMA,
   train_budget_milli_node_hours: 'Integer' = 1000,
-  model_prefix: String = 'bwmodel'
+  model_prefix: String = 'bwmodel',
+  # one of strings: [MAXIMIZE_AU_ROC, MAXIMIZE_AU_PRC, MINIMIZE_LOG_LOSS, MAXIMIZE_RECALL_AT_PRECISION, MAXIMIZE_PRECISION_AT_RECALL, MINIMIZE_RMSE, MINIMIZE_MAE, MINIMIZE_RMSLE]
+  optimization_objective: String = '',  # if not set, will use default
+  # ["title", "body", "answer_count", "comment_count", "creation_date", "favorite_count", "owner_user_id", "score", "view_count"]
+  include_column_spec_names: String = '',
+  exclude_column_spec_names: String = '',
   ):
 
 
   create_dataset = create_dataset_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
-    display_name=dataset_display_name,
+    dataset_display_name=dataset_display_name,
     api_endpoint=api_endpoint,
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
@@ -68,7 +81,7 @@ def automl_tables(  #pylint: disable=unused-argument
   import_data = import_data_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
-    display_name=dataset_display_name,
+    dataset_display_name=dataset_display_name,
     api_endpoint=api_endpoint,
     path=path
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
@@ -93,8 +106,9 @@ def automl_tables(  #pylint: disable=unused-argument
     gcp_region=gcp_region,
     dataset_display_name=dataset_display_name,
     api_endpoint=api_endpoint,
-    model_name= '{}{}'.format(model_prefix, str(int(time.time()))),
-    train_budget_milli_node_hours=train_budget_milli_node_hours
+    model_prefix=model_prefix,
+    train_budget_milli_node_hours=train_budget_milli_node_hours,
+    optimization_objective=optimization_objective
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
   train_model.after(set_schema)
@@ -103,14 +117,14 @@ def automl_tables(  #pylint: disable=unused-argument
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
     api_endpoint=api_endpoint,
-    model_display_name=train_model.outputs['model_name']
+    model_display_name=train_model.outputs['model_display_name']
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
   deploy_model = deploy_model_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
     api_endpoint=api_endpoint,
-    model_display_name=train_model.outputs['model_name']
+    model_display_name=train_model.outputs['model_display_name']
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
 

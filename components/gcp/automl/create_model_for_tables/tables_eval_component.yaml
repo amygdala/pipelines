@@ -6,11 +6,15 @@ inputs:
   type: String
 - name: model_display_name
   type: String
+- name: bucket_name
+  type: String
+- name: gcs_path
+  type: String
 - name: api_endpoint
   type: String
   optional: true
 outputs:
-- name: evals
+- name: evals_path
   type: String
 - name: feat_list
   type: String
@@ -22,16 +26,27 @@ implementation:
     - -u
     - -c
     - "from typing import NamedTuple\n\ndef automl_eval_tables_model(\n\tgcp_project_id:\
-      \ str,\n\tgcp_region: str,\n\t# dataset_display_name: str,\n  model_display_name:\
-      \ str,\n  api_endpoint: str = None,\n) -> NamedTuple('Outputs', [('evals', str),\
-      \ ('feat_list', str)]):\n  import google\n  import json\n  import logging\n\
-      \  import pickle\n  from google.api_core.client_options import ClientOptions\n\
-      \  from google.api_core import exceptions\n  from google.cloud import automl_v1beta1\
-      \ as automl\n  from google.cloud.automl_v1beta1 import enums\n  import subprocess\n\
-      \  import sys\n\n  def get_model_details(client, model_display_name):\n    try:\n\
-      \        model = client.get_model(model_display_name=model_display_name)\n \
-      \   except exceptions.NotFound:\n        logging.info(\"Model %s not found.\"\
-      \ % model_display_name)\n        return (None, None)\n\n    model = client.get_model(model_display_name=model_display_name)\n\
+      \ str,\n\tgcp_region: str,\n  model_display_name: str,\n  bucket_name: str,\n\
+      \  gcs_path: str,\n  api_endpoint: str = None,\n) -> NamedTuple('Outputs', [('evals_path',\
+      \ str), ('feat_list', str)]):\n  import subprocess\n  import sys\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',\n     '--no-warn-script-location'],\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',\n     '--no-warn-script-location'],\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'google-cloud-storage',\n     '--no-warn-script-location'],\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n\n  import google\n\
+      \  import json\n  import logging\n  import pickle\n\n  # import kfp\n  from\
+      \ google.api_core.client_options import ClientOptions\n  from google.api_core\
+      \ import exceptions\n  from google.cloud import automl_v1beta1 as automl\n \
+      \ from google.cloud.automl_v1beta1 import enums\n  from google.cloud import\
+      \ storage\n\n  def copy_string_to_gcs(project, bucket_name, gcs_path, pstring):\n\
+      \    logging.info('Using bucket {} and path {}'.format(bucket_name, gcs_path))\n\
+      \    storage_client = storage.Client(project=project)\n    bucket = storage_client.get_bucket(bucket_name)\n\
+      \    blob = bucket.blob(gcs_path)\n    blob.upload_from_string(pstring)\n\n\
+      \  def get_model_details(client, model_display_name):\n    try:\n        model\
+      \ = client.get_model(model_display_name=model_display_name)\n    except exceptions.NotFound:\n\
+      \        logging.info(\"Model %s not found.\" % model_display_name)\n      \
+      \  return (None, None)\n\n    model = client.get_model(model_display_name=model_display_name)\n\
       \    # Retrieve deployment state.\n    if model.deployment_state == enums.Model.DeploymentState.DEPLOYED:\n\
       \        deployment_state = \"deployed\"\n    else:\n        deployment_state\
       \ = \"undeployed\"\n    # get features of top global importance\n    feat_list\
@@ -47,31 +62,39 @@ implementation:
       \\tseconds: {}\".format(model.create_time.seconds))\n    logging.info(\"\\tnanos:\
       \ {}\".format(model.create_time.nanos))\n    logging.info(\"Model deployment\
       \ state: {}\".format(deployment_state))\n\n    return (model, feat_list)\n\n\
-      \  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',\
-      \ '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK':\
-      \ '1'}, check=True)\n\n  logging.getLogger().setLevel(logging.INFO)  # TODO:\
-      \ make level configurable\n  # TODO: we could instead check for region 'eu'\
-      \ and use 'eu-automl.googleapis.com:443'endpoint\n  # in that case, instead\
-      \ of requiring endpoint to be specified.\n  if api_endpoint:\n    client_options\
-      \ = ClientOptions(api_endpoint=api_endpoint)\n    client = automl.TablesClient(project=gcp_project_id,\
-      \ region=gcp_region,\n        client_options=client_options)\n  else:\n    client\
-      \ = automl.TablesClient(project=gcp_project_id, region=gcp_region)\n\n  (model,\
-      \ feat_list) = get_model_details(client, model_display_name)\n\n  evals = list(client.list_model_evaluations(model_display_name=model_display_name))\n\
-      \  logging.info('Model evals: {}'.format(evals))\n  pickled_eval = pickle.dumps(evals[1])\n\
-      \  # reconst = pickle.loads(pickled_eval)\n  # print('reconst:')\n  # print(reconst)\n\
-      \  return(pickled_eval, json.dumps(feat_list))\n\ndef _serialize_str(str_value:\
-      \ str) -> str:\n    if not isinstance(str_value, str):\n        raise TypeError('Value\
-      \ \"{}\" has type \"{}\" instead of str.'.format(str(str_value), str(type(str_value))))\n\
-      \    return str_value\n\nimport argparse\n_parser = argparse.ArgumentParser(prog='Automl\
+      \  logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable\n\
+      \  # TODO: we could instead check for region 'eu' and use 'eu-automl.googleapis.com:443'endpoint\n\
+      \  # in that case, instead of requiring endpoint to be specified.\n  if api_endpoint:\n\
+      \    client_options = ClientOptions(api_endpoint=api_endpoint)\n    client =\
+      \ automl.TablesClient(project=gcp_project_id, region=gcp_region,\n        client_options=client_options)\n\
+      \  else:\n    client = automl.TablesClient(project=gcp_project_id, region=gcp_region)\n\
+      \n  (model, feat_list) = get_model_details(client, model_display_name)\n\n \
+      \ # response = client.list_model_evaluations(model_display_name=model_display_name)\n\
+      \  # for evaluation in response:\n  #   print(\"Model evaluation name: {}\"\
+      .format(evaluation.name))\n  #   print(\"Model evaluation id: {}\".format(evaluation.name.split(\"\
+      /\")[-1]))\n  #   print('disp name: {}'.format(evaluation.display_name))\n \
+      \ #   print('eval:-------\\n{}'.format(evaluation))\n\n  evals = list(client.list_model_evaluations(model_display_name=model_display_name))\n\
+      \  # with open('temp_oput2', \"w\") as f:\n    # f.write('Model evals:\\n{}'.format(evals))\n\
+      \  pstring = pickle.dumps(evals)\n  # pstring = pickled_eval.hex()\n  copy_string_to_gcs(gcp_project_id,\
+      \ bucket_name, gcs_path, pstring)\n  # use bytes.fromhex(string) in other components,\
+      \ then pickle.loads() the result\n  # xxx = bytes.fromhex(pstring)\n  # reconst\
+      \ = pickle.loads(xxx)\n\n  feat_list_string = json.dumps(feat_list)\n  return(gcs_path,\
+      \ feat_list_string)\n\ndef _serialize_str(str_value: str) -> str:\n    if not\
+      \ isinstance(str_value, str):\n        raise TypeError('Value \"{}\" has type\
+      \ \"{}\" instead of str.'.format(str(str_value), str(type(str_value))))\n  \
+      \  return str_value\n\nimport argparse\n_parser = argparse.ArgumentParser(prog='Automl\
       \ eval tables model', description='')\n_parser.add_argument(\"--gcp-project-id\"\
       , dest=\"gcp_project_id\", type=str, required=True, default=argparse.SUPPRESS)\n\
       _parser.add_argument(\"--gcp-region\", dest=\"gcp_region\", type=str, required=True,\
       \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--model-display-name\"\
       , dest=\"model_display_name\", type=str, required=True, default=argparse.SUPPRESS)\n\
-      _parser.add_argument(\"--api-endpoint\", dest=\"api_endpoint\", type=str, required=False,\
-      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"----output-paths\", dest=\"\
-      _output_paths\", type=str, nargs=2)\n_parsed_args = vars(_parser.parse_args())\n\
-      _output_files = _parsed_args.pop(\"_output_paths\", [])\n\n_outputs = automl_eval_tables_model(**_parsed_args)\n\
+      _parser.add_argument(\"--bucket-name\", dest=\"bucket_name\", type=str, required=True,\
+      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--gcs-path\", dest=\"gcs_path\"\
+      , type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
+      --api-endpoint\", dest=\"api_endpoint\", type=str, required=False, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"----output-paths\", dest=\"_output_paths\", type=str,\
+      \ nargs=2)\n_parsed_args = vars(_parser.parse_args())\n_output_files = _parsed_args.pop(\"\
+      _output_paths\", [])\n\n_outputs = automl_eval_tables_model(**_parsed_args)\n\
       \nif not hasattr(_outputs, '__getitem__') or isinstance(_outputs, str):\n  \
       \  _outputs = [_outputs]\n\n_output_serializers = [\n    _serialize_str,\n \
       \   _serialize_str\n]\n\nimport os\nfor idx, output_file in enumerate(_output_files):\n\
@@ -84,6 +107,10 @@ implementation:
     - inputValue: gcp_region
     - --model-display-name
     - inputValue: model_display_name
+    - --bucket-name
+    - inputValue: bucket_name
+    - --gcs-path
+    - inputValue: gcs_path
     - if:
         cond:
           isPresent: api_endpoint
@@ -91,5 +118,5 @@ implementation:
         - --api-endpoint
         - inputValue: api_endpoint
     - '----output-paths'
-    - outputPath: evals
+    - outputPath: evals_path
     - outputPath: feat_list

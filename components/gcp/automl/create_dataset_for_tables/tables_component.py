@@ -18,7 +18,7 @@ from typing import NamedTuple
 def automl_create_dataset_for_tables(
   gcp_project_id: str,
   gcp_region: str,
-  display_name: str,
+  dataset_display_name: str,
   api_endpoint: str = None,
   tables_dataset_metadata: dict = {},
   # retry=None, #=google.api_core.gapic_v1.method.DEFAULT,
@@ -29,6 +29,7 @@ def automl_create_dataset_for_tables(
   '''
   import sys
   import subprocess
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
   import google
@@ -49,7 +50,7 @@ def automl_create_dataset_for_tables(
   try:
     # Create a dataset with the given display name
     # TODO: not clear that description, timeout & retry args still supported?..
-    dataset = client.create_dataset(display_name, metadata=tables_dataset_metadata)
+    dataset = client.create_dataset(dataset_display_name, metadata=tables_dataset_metadata)
     # Log info about the created dataset
     logging.info("Dataset name: {}".format(dataset.name))
     logging.info("Dataset id: {}".format(dataset.name.split("/")[-1]))

@@ -6,13 +6,13 @@ inputs:
   type: String
 - name: gcp_region
   type: String
-- name: display_name
+- name: dataset_display_name
   type: String
 - name: api_endpoint
   type: String
   optional: true
 outputs:
-- name: display_name
+- name: dataset_display_name
   type: String
 implementation:
   container:
@@ -29,11 +29,12 @@ implementation:
         path: str,
         gcp_project_id: str,
         gcp_region: str,
-        display_name: str,
+        dataset_display_name: str,
         api_endpoint: str = None,
-      ) -> NamedTuple('Outputs', [('display_name', str)]):
+      ) -> NamedTuple('Outputs', [('dataset_display_name', str)]):
         import sys
         import subprocess
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
         subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
         import google
@@ -75,13 +76,13 @@ implementation:
         response = None
         if path.startswith('bq'):
           response = client.import_data(
-            dataset_display_name=display_name, bigquery_input_uri=path
+            dataset_display_name=dataset_display_name, bigquery_input_uri=path
           )
         else:
           # Get the multiple Google Cloud Storage URIs.
           input_uris = path.split(",")
           response = client.import_data(
-            dataset_display_name=display_name,
+            dataset_display_name=dataset_display_name,
             gcs_input_uris=input_uris
             )
         logging.info("Processing import... This can take a while.")
@@ -91,8 +92,8 @@ implementation:
         logging.info("Operation name: {}".format(response.operation.name))
 
         # now list the inferred col schema
-        list_column_specs(client, display_name)
-        return (display_name)
+        list_column_specs(client, dataset_display_name)
+        return (dataset_display_name)
 
       def _serialize_str(str_value: str) -> str:
           if not isinstance(str_value, str):
@@ -104,7 +105,7 @@ implementation:
       _parser.add_argument("--path", dest="path", type=str, required=True, default=argparse.SUPPRESS)
       _parser.add_argument("--gcp-project-id", dest="gcp_project_id", type=str, required=True, default=argparse.SUPPRESS)
       _parser.add_argument("--gcp-region", dest="gcp_region", type=str, required=True, default=argparse.SUPPRESS)
-      _parser.add_argument("--display-name", dest="display_name", type=str, required=True, default=argparse.SUPPRESS)
+      _parser.add_argument("--dataset-display-name", dest="dataset_display_name", type=str, required=True, default=argparse.SUPPRESS)
       _parser.add_argument("--api-endpoint", dest="api_endpoint", type=str, required=False, default=argparse.SUPPRESS)
       _parser.add_argument("----output-paths", dest="_output_paths", type=str, nargs=1)
       _parsed_args = vars(_parser.parse_args())
@@ -134,8 +135,8 @@ implementation:
     - inputValue: gcp_project_id
     - --gcp-region
     - inputValue: gcp_region
-    - --display-name
-    - inputValue: display_name
+    - --dataset-display-name
+    - inputValue: dataset_display_name
     - if:
         cond:
           isPresent: api_endpoint
@@ -143,4 +144,4 @@ implementation:
         - --api-endpoint
         - inputValue: api_endpoint
     - '----output-paths'
-    - outputPath: display_name
+    - outputPath: dataset_display_name

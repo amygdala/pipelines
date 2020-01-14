@@ -24,12 +24,14 @@ implementation:
     - "from typing import NamedTuple\n\ndef automl_deploy_tables_model(\n\tgcp_project_id:\
       \ str,\n\tgcp_region: str,\n\t# dataset_display_name: str,\n  model_display_name:\
       \ str,\n  api_endpoint: str = None,\n) -> NamedTuple('Outputs', [('model_display_name',\
-      \ str), ('status', str)]):\n  import google\n  import logging\n  from google.api_core.client_options\
-      \ import ClientOptions\n  from google.api_core import exceptions\n  from google.cloud\
-      \ import automl_v1beta1 as automl\n  from google.cloud.automl_v1beta1 import\
-      \ enums\n  import subprocess\n  import sys\n\n  subprocess.run([sys.executable,\
+      \ str), ('status', str)]):\n  import subprocess\n  import sys\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'],\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n  subprocess.run([sys.executable,\
       \ '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'],\
-      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n\n  logging.getLogger().setLevel(logging.INFO)\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n\n  import google\n\
+      \  import logging\n  from google.api_core.client_options import ClientOptions\n\
+      \  from google.api_core import exceptions\n  from google.cloud import automl_v1beta1\
+      \ as automl\n  from google.cloud.automl_v1beta1 import enums\n\n  logging.getLogger().setLevel(logging.INFO)\
       \  # TODO: make level configurable\n  # TODO: we could instead check for region\
       \ 'eu' and use 'eu-automl.googleapis.com:443'endpoint\n  # in that case, instead\
       \ of requiring endpoint to be specified.\n  if api_endpoint:\n    client_options\

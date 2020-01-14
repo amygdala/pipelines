@@ -6,7 +6,7 @@ inputs:
   type: String
 - name: gcp_region
   type: String
-- name: display_name
+- name: dataset_display_name
   type: String
 - name: api_endpoint
   type: String
@@ -35,7 +35,7 @@ implementation:
       def automl_create_dataset_for_tables(
         gcp_project_id: str,
         gcp_region: str,
-        display_name: str,
+        dataset_display_name: str,
         api_endpoint: str = None,
         tables_dataset_metadata: dict = {},
         # retry=None, #=google.api_core.gapic_v1.method.DEFAULT,
@@ -46,6 +46,7 @@ implementation:
         '''
         import sys
         import subprocess
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
         subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
         import google
@@ -66,7 +67,7 @@ implementation:
         try:
           # Create a dataset with the given display name
           # TODO: not clear that description, timeout & retry args still supported?..
-          dataset = client.create_dataset(display_name, metadata=tables_dataset_metadata)
+          dataset = client.create_dataset(dataset_display_name, metadata=tables_dataset_metadata)
           # Log info about the created dataset
           logging.info("Dataset name: {}".format(dataset.name))
           logging.info("Dataset id: {}".format(dataset.name.split("/")[-1]))
@@ -84,17 +85,17 @@ implementation:
           logging.warn(e)
           raise e   # TODO: other exception? return values rather than raise exception?
 
+      import json
       def _serialize_str(str_value: str) -> str:
           if not isinstance(str_value, str):
               raise TypeError('Value "{}" has type "{}" instead of str.'.format(str(str_value), str(type(str_value))))
           return str_value
 
-      import json
       import argparse
       _parser = argparse.ArgumentParser(prog='Automl create dataset for tables', description='automl_create_dataset_for_tables creates an empty Dataset for AutoML tables\n')
       _parser.add_argument("--gcp-project-id", dest="gcp_project_id", type=str, required=True, default=argparse.SUPPRESS)
       _parser.add_argument("--gcp-region", dest="gcp_region", type=str, required=True, default=argparse.SUPPRESS)
-      _parser.add_argument("--display-name", dest="display_name", type=str, required=True, default=argparse.SUPPRESS)
+      _parser.add_argument("--dataset-display-name", dest="dataset_display_name", type=str, required=True, default=argparse.SUPPRESS)
       _parser.add_argument("--api-endpoint", dest="api_endpoint", type=str, required=False, default=argparse.SUPPRESS)
       _parser.add_argument("--tables-dataset-metadata", dest="tables_dataset_metadata", type=json.loads, required=False, default=argparse.SUPPRESS)
       _parser.add_argument("----output-paths", dest="_output_paths", type=str, nargs=3)
@@ -125,8 +126,8 @@ implementation:
     - inputValue: gcp_project_id
     - --gcp-region
     - inputValue: gcp_region
-    - --display-name
-    - inputValue: display_name
+    - --dataset-display-name
+    - inputValue: dataset_display_name
     - if:
         cond:
           isPresent: api_endpoint

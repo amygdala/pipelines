@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from typing import NamedTuple
-import time
 
 
 def automl_create_model_for_tables(
@@ -21,20 +20,24 @@ def automl_create_model_for_tables(
 	gcp_region: str,
 	dataset_display_name: str,
   api_endpoint: str = None,
-  model_name: str = 'bwmodel_' + str(int(time.time())),
+  model_display_name: str = None,
+  model_prefix: str = 'bwmodel',
   optimization_objective: str = None,
-  include_column_spec_names: str = None,
-  exclude_column_spec_names: str = None,
+  include_column_spec_names: list = None,
+  exclude_column_spec_names: list = None,
 	train_budget_milli_node_hours: int = 1000,
-) -> NamedTuple('Outputs', [('model_name', str), ('model_id', str)]):
+) -> NamedTuple('Outputs', [('model_display_name', str), ('model_name', str), ('model_id', str)]):
+
+  import subprocess
+  import sys
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
+
   import google
   import logging
   from google.api_core.client_options import ClientOptions
   from google.cloud import automl_v1beta1 as automl
-  import subprocess
-  import sys
-
-  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
+  import time
 
   logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable
   # TODO: we could instead check for region 'eu' and use 'eu-automl.googleapis.com:443'endpoint
@@ -46,9 +49,12 @@ def automl_create_model_for_tables(
   else:
     client = automl.TablesClient(project=gcp_project_id, region=gcp_region)
 
-  logging.info('Training model {}...'.format(model_name))
+  if not model_display_name:
+    model_display_name = '{}_{}'.format(model_prefix, str(int(time.time())))
+
+  logging.info('Training model {}...'.format(model_display_name))
   response = client.create_model(
-    model_name,
+    model_display_name,
     train_budget_milli_node_hours=train_budget_milli_node_hours,
     dataset_display_name=dataset_display_name,
     optimization_objective=optimization_objective,
@@ -65,14 +71,17 @@ def automl_create_model_for_tables(
   model_name = result.name
   model_id = model_name.rsplit('/', 1)[-1]
   print('model name: {}, model id: {}'.format(model_name, model_id))
-  return (model_name, model_id)
+  return (model_display_name, model_name, model_id)
 
 
 
 if __name__ == '__main__':
 	import kfp
-	kfp.components.func_to_container_op(automl_create_model_for_tables, output_component_file='tables_component.yaml', base_image='python:3.7')
+	kfp.components.func_to_container_op(automl_create_model_for_tables, output_component_file='tables_component.yaml',
+      base_image='python:3.7')
 
 
 # if __name__ == "__main__":
-#   automl_create_model_for_tables('aju-vtests2', 'us-central1', 'arghh3', )
+#   automl_create_model_for_tables('aju-vtests2', 'us-central1', 'so_digest2_32',
+#       include_column_spec_names=["title", "body", "answer_count", "comment_count", "creation_date", "favorite_count", "owner_user_id", "score", "view_count"]
+#       )

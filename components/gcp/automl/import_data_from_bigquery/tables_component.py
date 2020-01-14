@@ -20,11 +20,12 @@ def automl_import_data_for_tables(
   path: str,
   gcp_project_id: str,
   gcp_region: str,
-  display_name: str,
+  dataset_display_name: str,
   api_endpoint: str = None,
-) -> NamedTuple('Outputs', [('display_name', str)]):
+) -> NamedTuple('Outputs', [('dataset_display_name', str)]):
   import sys
   import subprocess
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
   import google
@@ -66,13 +67,13 @@ def automl_import_data_for_tables(
   response = None
   if path.startswith('bq'):
     response = client.import_data(
-      dataset_display_name=display_name, bigquery_input_uri=path
+      dataset_display_name=dataset_display_name, bigquery_input_uri=path
     )
   else:
     # Get the multiple Google Cloud Storage URIs.
     input_uris = path.split(",")
     response = client.import_data(
-      dataset_display_name=display_name,
+      dataset_display_name=dataset_display_name,
       gcs_input_uris=input_uris
       )
   logging.info("Processing import... This can take a while.")
@@ -82,8 +83,8 @@ def automl_import_data_for_tables(
   logging.info("Operation name: {}".format(response.operation.name))
 
   # now list the inferred col schema
-  list_column_specs(client, display_name)
-  return (display_name)
+  list_column_specs(client, dataset_display_name)
+  return (dataset_display_name)
 
 
 

@@ -21,17 +21,17 @@ def automl_deploy_tables_model(
   model_display_name: str,
   api_endpoint: str = None,
 ) -> NamedTuple('Outputs', [('model_display_name', str), ('status', str)]):
+  import subprocess
+  import sys
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',  '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
+
   import google
   import logging
   from google.api_core.client_options import ClientOptions
   from google.api_core import exceptions
   from google.cloud import automl_v1beta1 as automl
   from google.cloud.automl_v1beta1 import enums
-  import subprocess
-  import sys
-
-
-  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
   logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable
   # TODO: we could instead check for region 'eu' and use 'eu-automl.googleapis.com:443'endpoint
