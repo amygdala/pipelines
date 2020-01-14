@@ -26,7 +26,7 @@ def automl_create_model_for_tables(
   include_column_spec_names: str = None,
   exclude_column_spec_names: str = None,
 	train_budget_milli_node_hours: int = 1000,
-) -> NamedTuple('Outputs', [('model_path', str), ('model_id', str)]):
+) -> NamedTuple('Outputs', [('model_name', str), ('model_id', str)]):
   import google
   import logging
   from google.api_core.client_options import ClientOptions

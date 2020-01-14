@@ -11,7 +11,7 @@ inputs:
   optional: true
 - name: model_name
   type: String
-  default: bwmodel_1578961606
+  default: bwmodel_1578963021
   optional: true
 - name: optimization_objective
   type: String
@@ -27,7 +27,7 @@ inputs:
   default: '1000'
   optional: true
 outputs:
-- name: model_path
+- name: model_name
   type: String
 - name: model_id
   type: String
@@ -43,7 +43,7 @@ implementation:
       \ = None,\n  model_name: str = 'bwmodel_' + str(int(time.time())),\n  optimization_objective:\
       \ str = None,\n  include_column_spec_names: str = None,\n  exclude_column_spec_names:\
       \ str = None,\n\ttrain_budget_milli_node_hours: int = 1000,\n) -> NamedTuple('Outputs',\
-      \ [('model_path', str), ('model_id', str)]):\n  import google\n  import logging\n\
+      \ [('model_name', str), ('model_id', str)]):\n  import google\n  import logging\n\
       \  from google.api_core.client_options import ClientOptions\n  from google.cloud\
       \ import automl_v1beta1 as automl\n  import subprocess\n  import sys\n\n  subprocess.run([sys.executable,\
       \ '-m', 'pip', 'install', 'google-cloud-automl==0.9.0', '--quiet', '--no-warn-script-location'],\
@@ -135,5 +135,5 @@ implementation:
         - --train-budget-milli-node-hours
         - inputValue: train_budget_milli_node_hours
     - '----output-paths'
-    - outputPath: model_path
+    - outputPath: model_name
     - outputPath: model_id

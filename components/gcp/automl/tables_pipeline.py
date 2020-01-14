@@ -17,24 +17,25 @@ import kfp.dsl as dsl
 import kfp.gcp as gcp
 import kfp.components as comp
 from kfp.dsl.types import GCSPath, String, Dict
+import time
 
 
 create_dataset_op = comp.load_component_from_file(
-  './tables_component.yaml'  # pylint: disable=line-too-long
+  './create_dataset_for_tables/tables_component.yaml'
   )
-
 import_data_op = comp.load_component_from_file(
-  '../import_data_from_bigquery/tables_component.yaml' # pylint: disable=line-too-long
+  './import_data_from_bigquery/tables_component.yaml'
   )
-
 set_schema_op = comp.load_component_from_file(
-  '../import_data_from_bigquery/tables_schema_component.yaml' # pylint: disable=line-too-long
+  './import_data_from_bigquery/tables_schema_component.yaml'
   )
-
 train_model_op = comp.load_component_from_file(
-    '../create_model_for_tables/tables_component.py')
+    './create_model_for_tables/tables_component.yaml')
 eval_model_op = comp.load_component_from_file(
-    '../create_model_for_tables/tables_eval_component.py')
+    './create_model_for_tables/tables_eval_component.yaml')
+deploy_model_op = comp.load_component_from_file(
+    './deploy_model_for_tables/tables_deploy_component.yaml'
+    )
 
 @dsl.pipeline(
   name='AutoML Tables',
@@ -43,31 +44,31 @@ eval_model_op = comp.load_component_from_file(
 def automl_tables(  #pylint: disable=unused-argument
   gcp_project_id: String = 'YOUR_PROJECT_HERE',
   gcp_region: String = 'us-central1',
-  display_name: String = 'YOUR_DATASET_NAME',
+  dataset_display_name: String = 'YOUR_DATASET_NAME',
   api_endpoint: String = '',
-  tables_dataset_metadata: Dict = {},
   path: String = 'bq://aju-dev-demos.london_bikes_weather.bikes_weather',
   target_col_name: String = 'duration',
   time_col_name: String = '',
-  test_train_col_name: String = '',
+  # test_train_col_name: String = '',
  # schema dict with col name as key, type as value
   schema_info: Dict = {"end_station_id": "CATEGORY", "start_station_id": "CATEGORY", "loc_cross": "CATEGORY", "bike_id": "CATEGORY"},
+  train_budget_milli_node_hours: 'Integer' = 1000,
+  model_prefix: String = 'bwmodel'
   ):
 
 
   create_dataset = create_dataset_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
-    display_name=display_name,
+    display_name=dataset_display_name,
     api_endpoint=api_endpoint,
-    tables_dataset_metadata=tables_dataset_metadata
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
 
   import_data = import_data_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
-    display_name=display_name,
+    display_name=dataset_display_name,
     api_endpoint=api_endpoint,
     path=path
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
@@ -75,17 +76,42 @@ def automl_tables(  #pylint: disable=unused-argument
   set_schema = set_schema_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
-    display_name=display_name,
+    display_name=dataset_display_name,
     api_endpoint=api_endpoint,
     target_col_name=target_col_name,
     schema_info=schema_info,
-    time_col_name=time_col_name,
-    test_train_col_name=test_train_col_name
+    time_col_name=time_col_name
+    # test_train_col_name=test_train_col_name
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
 
   import_data.after(create_dataset)
   set_schema.after(import_data)
+
+  train_model = train_model_op(
+    gcp_project_id=gcp_project_id,
+    gcp_region=gcp_region,
+    dataset_display_name=dataset_display_name,
+    api_endpoint=api_endpoint,
+    model_name= '{}{}'.format(model_prefix, str(int(time.time()))),
+    train_budget_milli_node_hours=train_budget_milli_node_hours
+    ).apply(gcp.use_gcp_secret('user-gcp-sa'))
+
+  train_model.after(set_schema)
+
+  eval_model = eval_model_op(
+    gcp_project_id=gcp_project_id,
+    gcp_region=gcp_region,
+    api_endpoint=api_endpoint,
+    model_display_name=train_model.outputs['model_name']
+    ).apply(gcp.use_gcp_secret('user-gcp-sa'))
+
+  deploy_model = deploy_model_op(
+    gcp_project_id=gcp_project_id,
+    gcp_region=gcp_region,
+    api_endpoint=api_endpoint,
+    model_display_name=train_model.outputs['model_name']
+    ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
 
 if __name__ == '__main__':
