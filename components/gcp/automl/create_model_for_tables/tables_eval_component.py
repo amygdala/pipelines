@@ -97,10 +97,10 @@ def automl_eval_tables_model(
 
 
 
-# if __name__ == '__main__':
-# 	import kfp
-# 	kfp.components.func_to_container_op(automl_eval_tables_model, output_component_file='tables_eval_component.yaml', base_image='python:3.7')
+if __name__ == '__main__':
+	import kfp
+	kfp.components.func_to_container_op(automl_eval_tables_model, output_component_file='tables_eval_component.yaml', base_image='python:3.7')
 
 
-if __name__ == "__main__":
-  automl_eval_tables_model('aju-vtests2', 'us-central1', model_display_name='amy_test3_20191219032001')
+# if __name__ == "__main__":
+  # automl_eval_tables_model('aju-vtests2', 'us-central1', model_display_name='amy_test3_20191219032001')

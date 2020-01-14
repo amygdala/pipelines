@@ -31,6 +31,11 @@ set_schema_op = comp.load_component_from_file(
   '../import_data_from_bigquery/tables_schema_component.yaml' # pylint: disable=line-too-long
   )
 
+train_model_op = comp.load_component_from_file(
+    '../create_model_for_tables/tables_component.py')
+eval_model_op = comp.load_component_from_file(
+    '../create_model_for_tables/tables_eval_component.py')
+
 @dsl.pipeline(
   name='AutoML Tables',
   description='Demonstrate an AutoML Tables workflow'

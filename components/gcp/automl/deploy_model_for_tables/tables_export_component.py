@@ -67,10 +67,10 @@ def automl_deploy_tables_model(
 
 
 
-if __name__ == '__main__':
-	import kfp
-	kfp.components.func_to_container_op(automl_deploy_tables_model, output_component_file='tables_deploy_component.yaml', base_image='python:3.7')
+# if __name__ == '__main__':
+# 	import kfp
+# 	kfp.components.func_to_container_op(automl_deploy_tables_model, output_component_file='tables_deploy_component.yaml', base_image='python:3.7')
 
 
-# if __name__ == "__main__":
-  # automl_deploy_tables_model('aju-vtests2', 'us-central1', model_display_name='so_digest2_20191220032828' )
+if __name__ == "__main__":
+  automl_deploy_tables_model('aju-vtests2', 'us-central1', model_display_name='so_digest2_20191220032828' )

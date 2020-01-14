@@ -69,10 +69,10 @@ def automl_create_model_for_tables(
 
 
 
-# if __name__ == '__main__':
-# 	import kfp
-# 	kfp.components.func_to_container_op(automl_create_model_for_tables, output_component_file='tables_component.yaml', base_image='python:3.7')
+if __name__ == '__main__':
+	import kfp
+	kfp.components.func_to_container_op(automl_create_model_for_tables, output_component_file='tables_component.yaml', base_image='python:3.7')
 
 
-if __name__ == "__main__":
-  automl_create_model_for_tables('aju-vtests2', 'us-central1', 'arghh3', )
+# if __name__ == "__main__":
+#   automl_create_model_for_tables('aju-vtests2', 'us-central1', 'arghh3', )
