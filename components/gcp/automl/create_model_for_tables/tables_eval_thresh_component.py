@@ -24,7 +24,7 @@ def automl_eval_threshold(
   gcs_path: str,
   api_endpoint: str = None,
   # eval_info_string: str = None,
-  thresholds: str = '{}',
+  thresholds: str = '{"au_prc": 0.9}',
   confidence_threshold: float = 0.5
 
 ) -> NamedTuple('Outputs', [('deploy', bool)]):
@@ -66,42 +66,51 @@ def automl_eval_threshold(
   else:
     client = automl.TablesClient(project=gcp_project_id, region=gcp_region)
 
-  try:
-    au_prc = None
-    recall = None
-    precision = None
-    f1_score = None
-    au_roc = None
-    log_loss = None
-    # add regression metrics..., confusion matrix stuff for binary classif case..
+  thresholds_dict = json.loads(thresholds)
+  logging.info('thresholds dict: {}'.format(thresholds_dict))
 
+  try:
+    eresults = {}
+    # TODO: add handling of regression metrics..., confusion matrix stuff for binary classif case..
     eval_string = get_string_from_gcs(gcp_project_id, bucket_name, gcs_path)
     eval_info = pickle.loads(eval_string)
     multiclass = True  # aju temp testing
     # TODO:
     # Figure out what kind of eval it is...
 
-    if multiclass:
+    if multiclass and thresholds_dict:
       example_count = eval_info[0].evaluated_example_count
       print('Looking for example_count {}'.format(example_count))
       for e in eval_info[1:]:  # we know we don't want the first elt
         if e.evaluated_example_count == example_count:
           # print('found relevant eval {}'.format(e))
           # TODO: which position threshold ?
-          au_prc = e.classification_evaluation_metrics.au_prc
-          au_roc = e.classification_evaluation_metrics.au_roc
-          log_loss = e.classification_evaluation_metrics.log_loss
-          logging.info('got: au_prc {}, au_roc {}, log_loss {}'.format(
-              au_prc, au_roc, log_loss))
+          eresults['au_prc'] = e.classification_evaluation_metrics.au_prc
+          eresults['au_roc'] = e.classification_evaluation_metrics.au_roc
+          eresults['log_loss'] = e.classification_evaluation_metrics.log_loss
           for i in e.classification_evaluation_metrics.confidence_metrics_entry:
             if i.confidence_threshold >= confidence_threshold:
-              recall = i.recall
-              precision = i.precision
-              f1_score = i.f1_score
-              logging.info('got recall {}, precision {}, f1_score {}'.format(
-                  recall, precision, f1_score))
+              eresults['recall'] = i.recall
+              eresults['precision'] = i.precision
+              eresults['f1_score'] = i.f1_score
               break
           break
+      logging.info('eresults: {}'.format(eresults))
+      for k,v in thresholds_dict.items():
+        logging.info('k {}, v {}'.format(k, v))
+        if k == 'log_loss':
+          if eresults[k] > v:
+            logging.info('{} > {}; returning False'.format(
+                eresults[k], v))
+            return False
+        else:
+          if eresults[k] < v:
+            logging.info('{} < {}; returning False'.format(
+                eresults[k], v))
+            return False
+      return True
+    else:
+      return True
     # Get the confidence_metrics_entry with given confidence threshold
     # Grab the metrics and compare with those in 'thresholds'
     return True  # temp..
