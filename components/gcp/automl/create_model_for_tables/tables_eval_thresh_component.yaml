@@ -10,6 +10,7 @@ inputs:
   type: String
 - name: gcs_path
   type: String
+- name: eval_output
 - name: api_endpoint
   type: String
   optional: true
@@ -33,9 +34,9 @@ implementation:
     - -c
     - "from typing import NamedTuple\n\ndef automl_eval_threshold(\n\tgcp_project_id:\
       \ str,\n\tgcp_region: str,\n  model_display_name: str,\n  bucket_name: str,\n\
-      \  gcs_path: str,\n  api_endpoint: str = None,\n  # eval_info_string: str =\
-      \ None,\n  thresholds: str = '{\"au_prc\": 0.9}',\n  confidence_threshold: float\
-      \ = 0.5\n\n) -> NamedTuple('Outputs', [('deploy', bool)]):\n  import subprocess\n\
+      \  gcs_path: str,\n  # eval_output: InputPath('evals'),\n  eval_output,\n  api_endpoint:\
+      \ str = None,\n  thresholds: str = '{\"au_prc\": 0.9}',\n  confidence_threshold:\
+      \ float = 0.5\n\n) -> NamedTuple('Outputs', [('deploy', bool)]):\n  import subprocess\n\
       \  import sys\n  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',\n\
       \      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'},\
       \ check=True)\n  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',\n\
@@ -57,19 +58,22 @@ implementation:
       \ automl.TablesClient(project=gcp_project_id, region=gcp_region,\n        client_options=client_options)\n\
       \  else:\n    client = automl.TablesClient(project=gcp_project_id, region=gcp_region)\n\
       \n  thresholds_dict = json.loads(thresholds)\n  logging.info('thresholds dict:\
-      \ {}'.format(thresholds_dict))\n\n  try:\n    eresults = {}\n    # TODO: add\
-      \ handling of regression metrics..., confusion matrix stuff for binary classif\
-      \ case..\n    eval_string = get_string_from_gcs(gcp_project_id, bucket_name,\
-      \ gcs_path)\n    eval_info = pickle.loads(eval_string)\n    multiclass = True\
-      \  # aju temp testing\n    # TODO:\n    # Figure out what kind of eval it is...\n\
-      \n    if multiclass and thresholds_dict:\n      example_count = eval_info[0].evaluated_example_count\n\
-      \      print('Looking for example_count {}'.format(example_count))\n      for\
-      \ e in eval_info[1:]:  # we know we don't want the first elt\n        if e.evaluated_example_count\
-      \ == example_count:\n          # print('found relevant eval {}'.format(e))\n\
-      \          # TODO: which position threshold ?\n          eresults['au_prc']\
-      \ = e.classification_evaluation_metrics.au_prc\n          eresults['au_roc']\
-      \ = e.classification_evaluation_metrics.au_roc\n          eresults['log_loss']\
-      \ = e.classification_evaluation_metrics.log_loss\n          for i in e.classification_evaluation_metrics.confidence_metrics_entry:\n\
+      \ {}'.format(thresholds_dict))\n\n  # testing\n  logging.info('----eval_output\
+      \ from eval comp: {}'.format(eval_output))\n  with open(eval_output, 'r') as\
+      \ f:\n    data = f.read()\n    logging.info('data: {}'.format(data))\n\n  try:\n\
+      \    eresults = {}\n    # TODO: add handling of regression metrics..., confusion\
+      \ matrix stuff for binary classif case..\n    eval_string = get_string_from_gcs(gcp_project_id,\
+      \ bucket_name, gcs_path)\n    eval_info = pickle.loads(eval_string)\n    multiclass\
+      \ = True  # aju temp testing\n    # TODO:\n    # Figure out what kind of eval\
+      \ it is...\n\n    if multiclass and thresholds_dict:\n      example_count =\
+      \ eval_info[0].evaluated_example_count\n      print('Looking for example_count\
+      \ {}'.format(example_count))\n      for e in eval_info[1:]:  # we know we don't\
+      \ want the first elt\n        if e.evaluated_example_count == example_count:\n\
+      \          # print('found relevant eval {}'.format(e))\n          # TODO: which\
+      \ position threshold ?\n          eresults['au_prc'] = e.classification_evaluation_metrics.au_prc\n\
+      \          eresults['au_roc'] = e.classification_evaluation_metrics.au_roc\n\
+      \          eresults['log_loss'] = e.classification_evaluation_metrics.log_loss\n\
+      \          for i in e.classification_evaluation_metrics.confidence_metrics_entry:\n\
       \            if i.confidence_threshold >= confidence_threshold:\n          \
       \    eresults['recall'] = i.recall\n              eresults['precision'] = i.precision\n\
       \              eresults['f1_score'] = i.f1_score\n              break\n    \
@@ -95,17 +99,18 @@ implementation:
       \ type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
       --bucket-name\", dest=\"bucket_name\", type=str, required=True, default=argparse.SUPPRESS)\n\
       _parser.add_argument(\"--gcs-path\", dest=\"gcs_path\", type=str, required=True,\
-      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--api-endpoint\", dest=\"\
-      api_endpoint\", type=str, required=False, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
-      --thresholds\", dest=\"thresholds\", type=str, required=False, default=argparse.SUPPRESS)\n\
-      _parser.add_argument(\"--confidence-threshold\", dest=\"confidence_threshold\"\
-      , type=float, required=False, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
-      ----output-paths\", dest=\"_output_paths\", type=str, nargs=1)\n_parsed_args\
-      \ = vars(_parser.parse_args())\n_output_files = _parsed_args.pop(\"_output_paths\"\
-      , [])\n\n_outputs = automl_eval_threshold(**_parsed_args)\n\nif not hasattr(_outputs,\
-      \ '__getitem__') or isinstance(_outputs, str):\n    _outputs = [_outputs]\n\n\
-      _output_serializers = [\n    _serialize_bool\n]\n\nimport os\nfor idx, output_file\
-      \ in enumerate(_output_files):\n    try:\n        os.makedirs(os.path.dirname(output_file))\n\
+      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--eval-output\", dest=\"\
+      eval_output\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
+      --api-endpoint\", dest=\"api_endpoint\", type=str, required=False, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"--thresholds\", dest=\"thresholds\", type=str, required=False,\
+      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--confidence-threshold\"\
+      , dest=\"confidence_threshold\", type=float, required=False, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"----output-paths\", dest=\"_output_paths\", type=str,\
+      \ nargs=1)\n_parsed_args = vars(_parser.parse_args())\n_output_files = _parsed_args.pop(\"\
+      _output_paths\", [])\n\n_outputs = automl_eval_threshold(**_parsed_args)\n\n\
+      if not hasattr(_outputs, '__getitem__') or isinstance(_outputs, str):\n    _outputs\
+      \ = [_outputs]\n\n_output_serializers = [\n    _serialize_bool\n]\n\nimport\
+      \ os\nfor idx, output_file in enumerate(_output_files):\n    try:\n        os.makedirs(os.path.dirname(output_file))\n\
       \    except OSError:\n        pass\n    with open(output_file, 'w') as f:\n\
       \        f.write(_output_serializers[idx](_outputs[idx]))\n"
     args:
@@ -119,6 +124,8 @@ implementation:
     - inputValue: bucket_name
     - --gcs-path
     - inputValue: gcs_path
+    - --eval-output
+    - inputValue: eval_output
     - if:
         cond:
           isPresent: api_endpoint

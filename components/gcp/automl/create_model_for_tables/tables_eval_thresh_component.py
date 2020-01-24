@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from typing import NamedTuple
+from kfp.components import InputPath, OutputPath
+
 
 # An example of how the model eval info could be used to make decisions aboiut whether or not
 # to deploy the model.
@@ -22,8 +24,9 @@ def automl_eval_threshold(
   model_display_name: str,
   bucket_name: str,
   gcs_path: str,
+  # eval_output: InputPath('evals'),
+  eval_output,
   api_endpoint: str = None,
-  # eval_info_string: str = None,
   thresholds: str = '{"au_prc": 0.9}',
   confidence_threshold: float = 0.5
 
@@ -68,6 +71,10 @@ def automl_eval_threshold(
 
   thresholds_dict = json.loads(thresholds)
   logging.info('thresholds dict: {}'.format(thresholds_dict))
+
+  # this path of course does not work in this new pod
+  logging.info('----eval_output from eval comp: {}'.format(eval_output))
+
 
   try:
     eresults = {}

@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from typing import NamedTuple
+from kfp.components import InputPath, OutputPath
+
 
 def automl_eval_tables_model(
 	gcp_project_id: str,
@@ -20,8 +22,12 @@ def automl_eval_tables_model(
   model_display_name: str,
   bucket_name: str,
   gcs_path: str,
+  eval_output_path: OutputPath('evals'),
   api_endpoint: str = None,
-) -> NamedTuple('Outputs', [('evals_path', str), ('feat_list', str)]):
+
+) -> NamedTuple('Outputs', [('evals_path', str), ('feat_list', str),
+    ('eval_output_path', OutputPath)
+    ]):
   import subprocess
   import sys
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',
@@ -30,12 +36,16 @@ def automl_eval_tables_model(
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-storage',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
+  subprocess.run([sys.executable, '-m', 'pip', 'install', 'pathlib2',
+     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
 
   import google
   import json
   import logging
   import pickle
+  import pathlib2
+
 
   # import kfp
   from google.api_core.client_options import ClientOptions
@@ -104,13 +114,6 @@ def automl_eval_tables_model(
 
   (model, feat_list) = get_model_details(client, model_display_name)
 
-  # response = client.list_model_evaluations(model_display_name=model_display_name)
-  # for evaluation in response:
-  #   print("Model evaluation name: {}".format(evaluation.name))
-  #   print("Model evaluation id: {}".format(evaluation.name.split("/")[-1]))
-  #   print('disp name: {}'.format(evaluation.display_name))
-  #   print('eval:-------\n{}'.format(evaluation))
-
 
   evals = list(client.list_model_evaluations(model_display_name=model_display_name))
   # with open('temp_oput2', "w") as f:
@@ -118,12 +121,17 @@ def automl_eval_tables_model(
   pstring = pickle.dumps(evals)
   # pstring = pickled_eval.hex()
   copy_string_to_gcs(gcp_project_id, bucket_name, gcs_path, pstring)
-  # use bytes.fromhex(string) in other components, then pickle.loads() the result
-  # xxx = bytes.fromhex(pstring)
-  # reconst = pickle.loads(xxx)
+
+  # testing: write to eval_output_path also
+  logging.info("eval_output_path: %s", eval_output_path)
+  try:
+    pathlib2.Path(eval_output_path).parent.mkdir(parents=True)
+  except FileExistsError:
+    pass
+  pathlib2.Path(eval_output_path).write_bytes(pstring)
 
   feat_list_string = json.dumps(feat_list)
-  return(gcs_path, feat_list_string)
+  return(gcs_path, feat_list_string, eval_output_path)
 
 
 if __name__ == '__main__':
