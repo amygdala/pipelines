@@ -20,12 +20,12 @@ from kfp.dsl.types import GCSPath, String, Dict
 import json
 import time
 
-# DEFAULT_SCHEMA = json.dumps({"end_station_id": ["CATEGORY", True], "start_station_id": ["CATEGORY", True],
-#   "loc_cross": ["CATEGORY", True], "bike_id": ["CATEGORY", True]})
-DEFAULT_SCHEMA = json.dumps({"accepted_answer_id": ["CATEGORY", True], "id": ["CATEGORY", True],
-    "last_editor_display_name": ["CATEGORY", True], "last_editor_user_id": ["CATEGORY", True],
-    "owner_display_name": ["CATEGORY", True], "owner_user_id": ["CATEGORY", True],
-    "parent_id": ["CATEGORY", True], "post_type_id": ["CATEGORY", True], "tags": ["CATEGORY", True]})
+DEFAULT_SCHEMA = json.dumps({"end_station_id": ["CATEGORY", True], "start_station_id": ["CATEGORY", True],
+  "loc_cross": ["CATEGORY", True], "bike_id": ["CATEGORY", True]})
+# DEFAULT_SCHEMA = json.dumps({"accepted_answer_id": ["CATEGORY", True], "id": ["CATEGORY", True],
+    # "last_editor_display_name": ["CATEGORY", True], "last_editor_user_id": ["CATEGORY", True],
+    # "owner_display_name": ["CATEGORY", True], "owner_user_id": ["CATEGORY", True],
+    # "parent_id": ["CATEGORY", True], "post_type_id": ["CATEGORY", True], "tags": ["CATEGORY", True]})
 
 
 create_dataset_op = comp.load_component_from_file(
@@ -41,6 +41,8 @@ train_model_op = comp.load_component_from_file(
     './create_model_for_tables/tables_component.yaml')
 eval_model_op = comp.load_component_from_file(
     './create_model_for_tables/tables_eval_component.yaml')
+eval_metrics_op = comp.load_component_from_file(
+    './create_model_for_tables/tables_eval_metrics_component.yaml')
 deploy_model_op = comp.load_component_from_file(
     './deploy_model_for_tables/tables_deploy_component.yaml'
     )
@@ -67,8 +69,10 @@ def automl_tables(  #pylint: disable=unused-argument
   # ["title", "body", "answer_count", "comment_count", "creation_date", "favorite_count", "owner_user_id", "score", "view_count"]
   include_column_spec_names: String = '',
   exclude_column_spec_names: String = '',
+  bucket_name: String = 'aju-pipelines',
+  # thresholds: str = '{"au_prc": 0.9}',
+  thresholds: str = '{"mean_absolute_error": 480}',
   ):
-
 
   create_dataset = create_dataset_op(
     gcp_project_id=gcp_project_id,
@@ -116,16 +120,30 @@ def automl_tables(  #pylint: disable=unused-argument
   eval_model = eval_model_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
+    bucket_name=bucket_name,
+    # gcs_path='automl_evals/{}/evalstring'.format(dsl.RUN_ID_PLACEHOLDER),
     api_endpoint=api_endpoint,
     model_display_name=train_model.outputs['model_display_name']
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
-  deploy_model = deploy_model_op(
+  eval_metrics = eval_metrics_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
+    bucket_name=bucket_name,
     api_endpoint=api_endpoint,
-    model_display_name=train_model.outputs['model_display_name']
+    model_display_name=train_model.outputs['model_display_name'],
+    thresholds=thresholds,
+    eval_data=eval_model.outputs['eval_data'],
+    # gcs_path=eval_model.outputs['evals_gcs_path']
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
+
+  with dsl.Condition(eval_metrics.outputs['deploy'] == True):
+    deploy_model = deploy_model_op(
+      gcp_project_id=gcp_project_id,
+      gcp_region=gcp_region,
+      api_endpoint=api_endpoint,
+      model_display_name=train_model.outputs['model_display_name'],
+      ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
 
 if __name__ == '__main__':

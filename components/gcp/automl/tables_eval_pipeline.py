@@ -18,7 +18,7 @@ import kfp.gcp as gcp
 import kfp.components as comp
 from kfp.dsl.types import GCSPath, String
 import json
-import time
+# import time
 
 DEFAULT_SCHEMA = json.dumps({"end_station_id": "CATEGORY", "start_station_id": "CATEGORY", "loc_cross": "CATEGORY", "bike_id": "CATEGORY"})
 
@@ -35,8 +35,8 @@ train_model_op = comp.load_component_from_file(
     './create_model_for_tables/tables_component.yaml')
 eval_model_op = comp.load_component_from_file(
     './create_model_for_tables/tables_eval_component.yaml')
-eval_thresh_op = comp.load_component_from_file(
-    './create_model_for_tables/tables_eval_thresh_component.yaml')
+eval_metrics_op = comp.load_component_from_file(
+    './create_model_for_tables/tables_eval_metrics_component.yaml')
 deploy_model_op = comp.load_component_from_file(
     './deploy_model_for_tables/tables_deploy_component.yaml'
     )
@@ -64,28 +64,27 @@ def automl_tables_test(  #pylint: disable=unused-argument
 
   ):
 
-
   eval_model = eval_model_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
     bucket_name=bucket_name,
-    gcs_path='automl_evals/{}/evalstring'.format(dsl.RUN_ID_PLACEHOLDER),
+    # gcs_path='automl_evals/{}/evalstring'.format(dsl.RUN_ID_PLACEHOLDER),
     api_endpoint=api_endpoint,
     model_display_name=model_display_name
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
-  eval_thresh = eval_thresh_op(
+  eval_metrics = eval_metrics_op(
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
     bucket_name=bucket_name,
     api_endpoint=api_endpoint,
     model_display_name=model_display_name,
     thresholds=thresholds,
-    eval_output=eval_model.outputs['eval_output_path'],
-    gcs_path=eval_model.outputs['evals_path']
+    eval_data=eval_model.outputs['eval_data'],
+    # gcs_path=eval_model.outputs['evals_gcs_path']
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))
 
-  with dsl.Condition(eval_thresh.outputs['deploy'] == True):
+  with dsl.Condition(eval_metrics.outputs['deploy'] == True):
     deploy_model = deploy_model_op(
       gcp_project_id=gcp_project_id,
       gcp_region=gcp_region,

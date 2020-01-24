@@ -21,22 +21,21 @@ def automl_eval_tables_model(
 	gcp_region: str,
   model_display_name: str,
   bucket_name: str,
-  gcs_path: str,
-  eval_output_path: OutputPath('evals'),
+  # gcs_path: str,
+  eval_data_path: OutputPath('evals'),
   api_endpoint: str = None,
 
-) -> NamedTuple('Outputs', [('evals_path', str), ('feat_list', str),
-    ('eval_output_path', OutputPath)
-    ]):
+) -> NamedTuple('Outputs', [
+    # ('evals_gcs_path', str),
+    ('feat_list', str)]):
   import subprocess
   import sys
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
-  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-storage',
-     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
-  subprocess.run([sys.executable, '-m', 'pip', 'install', 'pathlib2',
+  subprocess.run([sys.executable, '-m', 'pip', 'install',  # 'google-cloud-storage',
+     'matplotlib', 'pathlib2',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
 
@@ -52,15 +51,15 @@ def automl_eval_tables_model(
   from google.api_core import exceptions
   from google.cloud import automl_v1beta1 as automl
   from google.cloud.automl_v1beta1 import enums
-  from google.cloud import storage
+  # from google.cloud import storage
 
 
-  def copy_string_to_gcs(project, bucket_name, gcs_path, pstring):
-    logging.info('Using bucket {} and path {}'.format(bucket_name, gcs_path))
-    storage_client = storage.Client(project=project)
-    bucket = storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(gcs_path)
-    blob.upload_from_string(pstring)
+  # def copy_string_to_gcs(project, bucket_name, gcs_path, pstring):
+  #   logging.info('Using bucket {} and path {}'.format(bucket_name, gcs_path))
+  #   storage_client = storage.Client(project=project)
+  #   bucket = storage_client.get_bucket(bucket_name)
+  #   blob = bucket.blob(gcs_path)
+  #   blob.upload_from_string(pstring)
 
 
   def get_model_details(client, model_display_name):
@@ -99,7 +98,23 @@ def automl_eval_tables_model(
     logging.info("\tnanos: {}".format(model.create_time.nanos))
     logging.info("Model deployment state: {}".format(deployment_state))
 
+    generate_fi_ui(feat_list)
+
     return (model, feat_list)
+
+  # TODO: generate ui-metadata for global features importance.
+  # Try nbconvert-based viz?... though that doesn't seem to be automatable?
+  def generate_fi_ui(feat_list):
+    import matplotlib.pyplot as plt
+
+    res = list(zip(*feat_list))
+    x = list(res[0])
+    y = list(res[1])
+    y_pos = list(range(len(y)))
+    plt.barh(y_pos, x, alpha=0.5)
+    plt.yticks(y_pos, y)
+    plt.savefig('/tmp/fi.png')
+    pass
 
 
   logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable
@@ -116,22 +131,24 @@ def automl_eval_tables_model(
 
 
   evals = list(client.list_model_evaluations(model_display_name=model_display_name))
-  # with open('temp_oput2', "w") as f:
-    # f.write('Model evals:\n{}'.format(evals))
+  with open('temp_oput_regression', "w") as f:
+    f.write('Model evals:\n{}'.format(evals))
   pstring = pickle.dumps(evals)
   # pstring = pickled_eval.hex()
-  copy_string_to_gcs(gcp_project_id, bucket_name, gcs_path, pstring)
+  # copy_string_to_gcs(gcp_project_id, bucket_name, gcs_path, pstring)
 
-  # testing: write to eval_output_path also
-  logging.info("eval_output_path: %s", eval_output_path)
-  try:
-    pathlib2.Path(eval_output_path).parent.mkdir(parents=True)
-  except FileExistsError:
-    pass
-  pathlib2.Path(eval_output_path).write_bytes(pstring)
+  # write to eval_data_path
+  if eval_data_path:
+    logging.info("eval_data_path: %s", eval_data_path)
+    try:
+      pathlib2.Path(eval_data_path).parent.mkdir(parents=True)
+    except FileExistsError:
+      pass
+    pathlib2.Path(eval_data_path).write_bytes(pstring)
 
   feat_list_string = json.dumps(feat_list)
-  return(gcs_path, feat_list_string, eval_output_path)
+  # return(gcs_path, feat_list_string)
+  return(feat_list_string)
 
 
 if __name__ == '__main__':
@@ -141,7 +158,10 @@ if __name__ == '__main__':
 
 # if __name__ == '__main__':
 
-#   (eval_hex, features) = automl_eval_tables_model('aju-vtests2', 'us-central1', model_display_name='somodel_1579284627')
-#   with open('temp_oput', "w") as f:
-#     f.write(eval_hex)
+# #   (eval_hex, features) = automl_eval_tables_model('aju-vtests2', 'us-central1', model_display_name='somodel_1579284627')
+#   (eval_hex, features) = automl_eval_tables_model('aju-vtests2', 'us-central1',
+#       bucket_name='aju-pipelines', model_display_name='bwmodel_1579017140',
+#       gcs_path='automl_evals/testing/somodel_1579284627', eval_data_path=None)
+# #   with open('temp_oput', "w") as f:
+# #     f.write(eval_hex)
 
