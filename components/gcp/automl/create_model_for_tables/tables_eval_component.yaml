@@ -73,14 +73,19 @@ implementation:
       \ seem to be automatable?\n  def generate_fi_ui(feat_list):\n    import matplotlib.pyplot\
       \ as plt\n\n    res = list(zip(*feat_list))\n    x = list(res[0])\n    y = list(res[1])\n\
       \    y_pos = list(range(len(y)))\n    plt.barh(y_pos, x, alpha=0.5)\n    plt.yticks(y_pos,\
-      \ y)\n    plt.savefig('/tmp/fi.png')\n    pass\n\n  logging.getLogger().setLevel(logging.INFO)\
-      \  # TODO: make level configurable\n  # TODO: we could instead check for region\
-      \ 'eu' and use 'eu-automl.googleapis.com:443'endpoint\n  # in that case, instead\
-      \ of requiring endpoint to be specified.\n  if api_endpoint:\n    client_options\
-      \ = ClientOptions(api_endpoint=api_endpoint)\n    client = automl.TablesClient(project=gcp_project_id,\
-      \ region=gcp_region,\n        client_options=client_options)\n  else:\n    client\
-      \ = automl.TablesClient(project=gcp_project_id, region=gcp_region)\n\n  (model,\
-      \ feat_list) = get_model_details(client, model_display_name)\n\n  evals = list(client.list_model_evaluations(model_display_name=model_display_name))\n\
+      \ y)\n    plt.savefig('/gfi.png')\n\n    with open('/gfi.html', 'w') as f:\n\
+      \      f.write('<html><head></head><body><img src=\"/gfi.png\" /></body></html>')\n\
+      \n    metadata = {\n      'outputs' : [{\n        'type': 'web-app',\n     \
+      \   'storage': 'gcs',\n        'source': \"/gfi.html\"\n      }]\n    }\n  \
+      \  with open('/mlpipeline-ui-metadata.json', 'w') as f:\n      json.dump(metadata,\
+      \ f)\n\n  logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable\n\
+      \  # TODO: we could instead check for region 'eu' and use 'eu-automl.googleapis.com:443'endpoint\n\
+      \  # in that case, instead of requiring endpoint to be specified.\n  if api_endpoint:\n\
+      \    client_options = ClientOptions(api_endpoint=api_endpoint)\n    client =\
+      \ automl.TablesClient(project=gcp_project_id, region=gcp_region,\n        client_options=client_options)\n\
+      \  else:\n    client = automl.TablesClient(project=gcp_project_id, region=gcp_region)\n\
+      \n  (model, feat_list) = get_model_details(client, model_display_name)\n\n \
+      \ evals = list(client.list_model_evaluations(model_display_name=model_display_name))\n\
       \  with open('temp_oput_regression', \"w\") as f:\n    f.write('Model evals:\\\
       n{}'.format(evals))\n  pstring = pickle.dumps(evals)\n  # pstring = pickled_eval.hex()\n\
       \  # copy_string_to_gcs(gcp_project_id, bucket_name, gcs_path, pstring)\n\n\

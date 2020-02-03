@@ -113,8 +113,20 @@ def automl_eval_tables_model(
     y_pos = list(range(len(y)))
     plt.barh(y_pos, x, alpha=0.5)
     plt.yticks(y_pos, y)
-    plt.savefig('/tmp/fi.png')
-    pass
+    plt.savefig('/gfi.png')
+
+    with open('/gfi.html', 'w') as f:
+      f.write('<html><head></head><body><img src="/gfi.png" /></body></html>')
+
+    metadata = {
+      'outputs' : [{
+        'type': 'web-app',
+        'storage': 'gcs',
+        'source': "/gfi.html"
+      }]
+    }
+    with open('/mlpipeline-ui-metadata.json', 'w') as f:
+      json.dump(metadata, f)
 
 
   logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable
