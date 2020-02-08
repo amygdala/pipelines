@@ -8,6 +8,8 @@ inputs:
   type: String
 - name: bucket_name
   type: String
+- name: gcs_path
+  type: String
 - name: api_endpoint
   type: String
   optional: true
@@ -25,34 +27,31 @@ implementation:
     - python3
     - -u
     - -c
-    - "def _make_parent_dirs_and_return_path(file_path: str):\n    import os\n   \
-      \ os.makedirs(os.path.dirname(file_path), exist_ok=True)\n    return file_path\n\
-      \nclass OutputPath:\n    '''When creating component from function, OutputPath\
+    - "class OutputPath:\n    '''When creating component from function, OutputPath\
       \ should be used as function parameter annotation to tell the system that the\
       \ function wants to output data by writing it into a file with the given path\
       \ instead of returning the data from the function.'''\n    def __init__(self,\
-      \ type=None):\n        self.type = type\n\nfrom typing import NamedTuple\n\n\
-      def automl_eval_tables_model(\n\tgcp_project_id: str,\n\tgcp_region: str,\n\
-      \  model_display_name: str,\n  bucket_name: str,\n  # gcs_path: str,\n  eval_data_path:\
-      \ OutputPath('evals'),\n  api_endpoint: str = None,\n\n) -> NamedTuple('Outputs',\
-      \ [\n    # ('evals_gcs_path', str),\n    ('feat_list', str)]):\n  import subprocess\n\
-      \  import sys\n  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',\n\
-      \     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'},\
-      \ check=True)\n  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',\n\
-      \     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'},\
-      \ check=True)\n  subprocess.run([sys.executable, '-m', 'pip', 'install',  #\
-      \ 'google-cloud-storage',\n     'matplotlib', 'pathlib2', 'google-cloud-storage',\n\
-      \     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'},\
-      \ check=True)\n\n  import google\n  import json\n  import logging\n  import\
+      \ type=None):\n        self.type = type\n\ndef _make_parent_dirs_and_return_path(file_path:\
+      \ str):\n    import os\n    os.makedirs(os.path.dirname(file_path), exist_ok=True)\n\
+      \    return file_path\n\nfrom typing import NamedTuple\n\ndef automl_eval_tables_model(\n\
+      \tgcp_project_id: str,\n\tgcp_region: str,\n  model_display_name: str,\n  bucket_name:\
+      \ str,\n  gcs_path: str,\n  eval_data_path: OutputPath('evals'),\n  api_endpoint:\
+      \ str = None,\n\n) -> NamedTuple('Outputs', [\n    # ('evals_gcs_path', str),\n\
+      \    ('feat_list', str)]):\n  import subprocess\n  import sys\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',\n     '--no-warn-script-location'],\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',\n     '--no-warn-script-location'],\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install',  # 'google-cloud-storage',\n     'matplotlib', 'pathlib2',\
+      \ 'google-cloud-storage',\n     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK':\
+      \ '1'}, check=True)\n\n  import google\n  import json\n  import logging\n  import\
       \ pickle\n  import pathlib2\n\n  from google.api_core.client_options import\
       \ ClientOptions\n  from google.api_core import exceptions\n  from google.cloud\
       \ import automl_v1beta1 as automl\n  from google.cloud.automl_v1beta1 import\
       \ enums\n  from google.cloud import storage\n\n  def upload_blob(bucket_name,\
       \ source_file_name, destination_blob_name,\n      public_url=False):\n    \"\
-      \"\"Uploads a file to the bucket.\"\"\"\n    # bucket_name = \"your-bucket-name\"\
-      \n    # source_file_name = \"local/path/to/file\"\n    # destination_blob_name\
-      \ = \"storage-object-name\"\n\n    storage_client = storage.Client()\n    bucket\
-      \ = storage_client.bucket(bucket_name)\n    blob = bucket.blob(destination_blob_name)\n\
+      \"\"Uploads a file to the bucket.\"\"\"\n\n    storage_client = storage.Client()\n\
+      \    bucket = storage_client.bucket(bucket_name)\n    blob = bucket.blob(destination_blob_name)\n\
       \n    blob.upload_from_filename(source_file_name)\n\n    logging.info(\"File\
       \ {} uploaded to {}.\".format(\n            source_file_name, destination_blob_name))\n\
       \    if public_url:\n      blob.make_public()\n      logging.info(\"Blob {}\
@@ -79,31 +78,27 @@ implementation:
       \    return (model, feat_list)\n\n  # TODO: generate ui-metadata for global\
       \ features importance.\n  # Try nbconvert-based viz?... though that doesn't\
       \ seem to be automatable?\n  def generate_fi_ui(feat_list):\n    import matplotlib.pyplot\
-      \ as plt\n\n    image_suffix = 'arghh/testing/gfi.png'\n    res = list(zip(*feat_list))\n\
+      \ as plt\n\n    image_suffix = '{}/gfi.png'.format(gcs_path)\n    res = list(zip(*feat_list))\n\
       \    x = list(res[0])\n    y = list(res[1])\n    y_pos = list(range(len(y)))\n\
       \    plt.barh(y_pos, x, alpha=0.5)\n    plt.yticks(y_pos, y)\n    plt.savefig('/gfi.png')\n\
       \    public_url = upload_blob(bucket_name, '/gfi.png', image_suffix, public_url=True)\n\
       \    logging.info('using image url {}'.format(public_url))\n\n    html_suffix\
-      \ = 'arghh/testing/gfi.html'\n    with open('/gfi.html', 'w') as f:\n      #\
-      \ f.write('<html><head></head><body><img src=\"https://storage.googleapis.com/aju-images/temp/gfi.png\"\
-      \ /></body></html>')\n      f.write('<html><head></head><body><img src=\"{}\"\
-      \ /></body></html>'.format(public_url))\n    upload_blob(bucket_name, '/gfi.html',\
-      \ html_suffix)\n    html_source = 'gs://{}/{}'.format(bucket_name, html_suffix)\n\
-      \    logging.info('metadata html source: {}'.format(html_source))\n\n    metadata\
-      \ = {\n      'outputs' : [\n      {\n        'storage': 'inline',\n        'source':\
-      \ '# Inline Markdown\\n[A link](https://www.kubeflow.org/)',\n        'type':\
-      \ 'markdown',\n      },\n      {\n        'type': 'web-app',\n        'storage':\
-      \ 'gcs',\n        # 'source': \"gs://aju-vtests2-misc/gfi.html\"\n        'source':\
-      \ html_source\n      }\n      ]}\n    logging.info('using metadata dict {}'.format(json.dumps(metadata)))\n\
-      \    with open('/mlpipeline-ui-metadata.json', 'w') as f:\n      json.dump(metadata,\
-      \ f)\n\n  logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable\n\
-      \  # TODO: we could instead check for region 'eu' and use 'eu-automl.googleapis.com:443'endpoint\n\
-      \  # in that case, instead of requiring endpoint to be specified.\n  if api_endpoint:\n\
-      \    client_options = ClientOptions(api_endpoint=api_endpoint)\n    client =\
-      \ automl.TablesClient(project=gcp_project_id, region=gcp_region,\n        client_options=client_options)\n\
-      \  else:\n    client = automl.TablesClient(project=gcp_project_id, region=gcp_region)\n\
-      \n  (model, feat_list) = get_model_details(client, model_display_name)\n\n \
-      \ evals = list(client.list_model_evaluations(model_display_name=model_display_name))\n\
+      \ = '{}/gfi.html'.format(gcs_path)\n    with open('/gfi.html', 'w') as f:\n\
+      \      f.write('<html><head></head><body><h1>Global Feature Importance</h1>\\\
+      n<img src=\"{}\" width=\"97%\"/></body></html>'.format(public_url))\n    upload_blob(bucket_name,\
+      \ '/gfi.html', html_suffix)\n    html_source = 'gs://{}/{}'.format(bucket_name,\
+      \ html_suffix)\n    logging.info('metadata html source: {}'.format(html_source))\n\
+      \n    metadata = {\n      'outputs' : [\n      {\n        'type': 'web-app',\n\
+      \        'storage': 'gcs',\n        'source': html_source\n      }]}\n    logging.info('using\
+      \ metadata dict {}'.format(json.dumps(metadata)))\n    with open('/mlpipeline-ui-metadata.json',\
+      \ 'w') as f:\n      json.dump(metadata, f)\n\n  logging.getLogger().setLevel(logging.INFO)\
+      \  # TODO: make level configurable\n  # TODO: we could instead check for region\
+      \ 'eu' and use 'eu-automl.googleapis.com:443'endpoint\n  # in that case, instead\
+      \ of requiring endpoint to be specified.\n  if api_endpoint:\n    client_options\
+      \ = ClientOptions(api_endpoint=api_endpoint)\n    client = automl.TablesClient(project=gcp_project_id,\
+      \ region=gcp_region,\n        client_options=client_options)\n  else:\n    client\
+      \ = automl.TablesClient(project=gcp_project_id, region=gcp_region)\n\n  (model,\
+      \ feat_list) = get_model_details(client, model_display_name)\n\n  evals = list(client.list_model_evaluations(model_display_name=model_display_name))\n\
       \  with open('temp_oput_regression', \"w\") as f:\n    f.write('Model evals:\\\
       n{}'.format(evals))\n  pstring = pickle.dumps(evals)\n  # pstring = pickled_eval.hex()\n\
       \  # copy_string_to_gcs(gcp_project_id, bucket_name, gcs_path, pstring)\n\n\
@@ -121,9 +116,10 @@ implementation:
       \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--model-display-name\"\
       , dest=\"model_display_name\", type=str, required=True, default=argparse.SUPPRESS)\n\
       _parser.add_argument(\"--bucket-name\", dest=\"bucket_name\", type=str, required=True,\
-      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--api-endpoint\", dest=\"\
-      api_endpoint\", type=str, required=False, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
-      --eval-data\", dest=\"eval_data_path\", type=_make_parent_dirs_and_return_path,\
+      \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--gcs-path\", dest=\"gcs_path\"\
+      , type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
+      --api-endpoint\", dest=\"api_endpoint\", type=str, required=False, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"--eval-data\", dest=\"eval_data_path\", type=_make_parent_dirs_and_return_path,\
       \ required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"----output-paths\"\
       , dest=\"_output_paths\", type=str, nargs=1)\n_parsed_args = vars(_parser.parse_args())\n\
       _output_files = _parsed_args.pop(\"_output_paths\", [])\n\n_outputs = automl_eval_tables_model(**_parsed_args)\n\
@@ -141,6 +137,8 @@ implementation:
     - inputValue: model_display_name
     - --bucket-name
     - inputValue: bucket_name
+    - --gcs-path
+    - inputValue: gcs_path
     - if:
         cond:
           isPresent: api_endpoint

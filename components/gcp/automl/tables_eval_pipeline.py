@@ -68,7 +68,7 @@ def automl_tables_test(  #pylint: disable=unused-argument
     gcp_project_id=gcp_project_id,
     gcp_region=gcp_region,
     bucket_name=bucket_name,
-    # gcs_path='automl_evals/{}/evalstring'.format(dsl.RUN_ID_PLACEHOLDER),
+    gcs_path='automl_evals/{}'.format(dsl.RUN_ID_PLACEHOLDER),
     api_endpoint=api_endpoint,
     model_display_name=model_display_name
     ).apply(gcp.use_gcp_secret('user-gcp-sa'))

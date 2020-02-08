@@ -36,6 +36,7 @@ def automl_eval_metrics(
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',
       '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',
+     'google-cloud-storage',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
 
@@ -47,7 +48,7 @@ def automl_eval_metrics(
   from google.api_core import exceptions
   from google.cloud import automl_v1beta1 as automl
   from google.cloud.automl_v1beta1 import enums
-  # from google.cloud import storage
+  from google.cloud import storage
 
 
   # def get_string_from_gcs(project, bucket_name, gcs_path):
@@ -56,6 +57,24 @@ def automl_eval_metrics(
   #   bucket = storage_client.get_bucket(bucket_name)
   #   blob = bucket.blob(gcs_path)
   #   return blob.download_as_string()
+
+  # def upload_blob(bucket_name, source_file_name, destination_blob_name,
+  #     public_url=False):
+  #   """Uploads a file to the bucket."""
+
+  #   storage_client = storage.Client()
+  #   bucket = storage_client.bucket(bucket_name)
+  #   blob = bucket.blob(destination_blob_name)
+
+  #   blob.upload_from_filename(source_file_name)
+
+  #   logging.info("File {} uploaded to {}.".format(
+  #           source_file_name, destination_blob_name))
+  #   if public_url:
+  #     blob.make_public()
+  #     logging.info("Blob {} is publicly accessible at {}".format(
+  #             blob.name, blob.public_url))
+  #   return blob.public_url
 
   logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable
   # TODO: we could instead check for region 'eu' and use 'eu-automl.googleapis.com:443'endpoint
@@ -71,6 +90,7 @@ def automl_eval_metrics(
   logging.info('thresholds dict: {}'.format(thresholds_dict))
 
   def regression_threshold_check(eval_info):
+    eresults = {}
     rmetrics = eval_info[1].regression_evaluation_metrics
     logging.info('got regression eval {}'.format(eval_info[1]))
     eresults['root_mean_squared_error'] = rmetrics.root_mean_squared_error
@@ -84,19 +104,19 @@ def automl_eval_metrics(
         if eresults[k] > v:
           logging.info('{} > {}; returning False'.format(
               eresults[k], v))
-          return False
+          return (False, eresults)
       elif eresults[k] < v:
         logging.info('{} < {}; returning False'.format(
             eresults[k], v))
-        return False
-    return True
+        return (False, eresults)
+    return (True, eresults)
 
   def classif_threshold_check(eval_info):
+    eresults = {}
     example_count = eval_info[0].evaluated_example_count
     print('Looking for example_count {}'.format(example_count))
     for e in eval_info[1:]:  # we know we don't want the first elt
       if e.evaluated_example_count == example_count:
-        # print('found relevant eval {}'.format(e))
         eresults['au_prc'] = e.classification_evaluation_metrics.au_prc
         eresults['au_roc'] = e.classification_evaluation_metrics.au_roc
         eresults['log_loss'] = e.classification_evaluation_metrics.log_loss
@@ -114,13 +134,13 @@ def automl_eval_metrics(
         if eresults[k] > v:
           logging.info('{} > {}; returning False'.format(
               eresults[k], v))
-          return False
+          return (False, eresults)
       else:
         if eresults[k] < v:
           logging.info('{} < {}; returning False'.format(
               eresults[k], v))
-          return False
-    return True
+          return (False, eresults)
+    return (True, eresults)
 
   def generate_cm_metadata():
     pass
@@ -130,7 +150,6 @@ def automl_eval_metrics(
     logging.info('successfully opened eval_data_path {}'.format(eval_data_path))
     try:
       eval_info = pickle.loads(f.read())
-      eresults = {}
       # TODO: add handling of confusion matrix stuff for binary classif case..
       # eval_string = get_string_from_gcs(gcp_project_id, bucket_name, gcs_path)
       # eval_info = pickle.loads(eval_string)
@@ -142,18 +161,42 @@ def automl_eval_metrics(
       if eval_info[1].regression_evaluation_metrics and eval_info[1].regression_evaluation_metrics.root_mean_squared_error:
         regression=True
         logging.info('found regression metrics {}'.format(eval_info[1].regression_evaluation_metrics))
-      if eval_info[1].classification_evaluation_metrics and eval_info[1].classification_evaluation_metrics.au_prc:
+      elif eval_info[1].classification_evaluation_metrics and eval_info[1].classification_evaluation_metrics.au_prc:
         classif = True
         logging.info('found classification metrics {}'.format(eval_info[1].classification_evaluation_metrics))
         # TODO: detect binary classification case
 
       if regression and thresholds_dict:
-        res = regression_threshold_check(eval_info)
+        res, eresults = regression_threshold_check(eval_info)
+        # logging.info('eresults: {}'.format(eresults))
+        metadata = {
+          'outputs' : [
+          {
+            'storage': 'inline',
+            'source': '# Regression metrics:\n\n```{}```\n'.format(eresults),
+            'type': 'markdown',
+          }]}
+        logging.info('using metadata dict {}'.format(json.dumps(metadata)))
+        with open('/mlpipeline-ui-metadata.json', 'w') as f:
+          json.dump(metadata, f)
         logging.info('deploy flag: {}'.format(res))
         # TODO: generate ui-metadata as appropriate
         return res
+
       elif classif and thresholds_dict:
-        res = classif_threshold_check(eval_info)
+        res, eresults = classif_threshold_check(eval_info)
+        # logging.info('eresults: {}'.format(eresults))
+        metadata = {
+          'outputs' : [
+          {
+            'storage': 'inline',
+            'source': '# classification metrics for confidence threshold {}:\n\n```{}```\n'.format(
+                confidence_threshold, eresults),
+            'type': 'markdown',
+          }]}
+        logging.info('using metadata dict {}'.format(json.dumps(metadata)))
+        with open('/mlpipeline-ui-metadata.json', 'w') as f:
+          json.dump(metadata, f)
         logging.info('deploy flag: {}'.format(res))
         # TODO: generate confusion matrix ui-metadata as approp etc.
         if binary_classif:

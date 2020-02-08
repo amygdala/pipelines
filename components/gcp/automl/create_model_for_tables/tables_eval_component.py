@@ -21,7 +21,7 @@ def automl_eval_tables_model(
 	gcp_region: str,
   model_display_name: str,
   bucket_name: str,
-  # gcs_path: str,
+  gcs_path: str,
   eval_data_path: OutputPath('evals'),
   api_endpoint: str = None,
 
@@ -56,9 +56,6 @@ def automl_eval_tables_model(
   def upload_blob(bucket_name, source_file_name, destination_blob_name,
       public_url=False):
     """Uploads a file to the bucket."""
-    # bucket_name = "your-bucket-name"
-    # source_file_name = "local/path/to/file"
-    # destination_blob_name = "storage-object-name"
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
@@ -120,7 +117,7 @@ def automl_eval_tables_model(
   def generate_fi_ui(feat_list):
     import matplotlib.pyplot as plt
 
-    image_suffix = 'arghh/testing/gfi.png'
+    image_suffix = '{}/gfi.png'.format(gcs_path)
     res = list(zip(*feat_list))
     x = list(res[0])
     y = list(res[1])
@@ -131,10 +128,9 @@ def automl_eval_tables_model(
     public_url = upload_blob(bucket_name, '/gfi.png', image_suffix, public_url=True)
     logging.info('using image url {}'.format(public_url))
 
-    html_suffix = 'arghh/testing/gfi.html'
+    html_suffix = '{}/gfi.html'.format(gcs_path)
     with open('/gfi.html', 'w') as f:
-      # f.write('<html><head></head><body><img src="https://storage.googleapis.com/aju-images/temp/gfi.png" /></body></html>')
-      f.write('<html><head></head><body><img src="{}" /></body></html>'.format(public_url))
+      f.write('<html><head></head><body><h1>Global Feature Importance</h1>\n<img src="{}" width="97%"/></body></html>'.format(public_url))
     upload_blob(bucket_name, '/gfi.html', html_suffix)
     html_source = 'gs://{}/{}'.format(bucket_name, html_suffix)
     logging.info('metadata html source: {}'.format(html_source))
@@ -144,7 +140,6 @@ def automl_eval_tables_model(
       {
         'type': 'web-app',
         'storage': 'gcs',
-        # 'source': "gs://aju-vtests2-misc/gfi.html"
         'source': html_source
       }]}
     logging.info('using metadata dict {}'.format(json.dumps(metadata)))
