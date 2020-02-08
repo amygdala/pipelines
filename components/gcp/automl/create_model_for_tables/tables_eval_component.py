@@ -35,7 +35,7 @@ def automl_eval_tables_model(
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install',  # 'google-cloud-storage',
-     'matplotlib', 'pathlib2',
+     'matplotlib', 'pathlib2', 'google-cloud-storage',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
 
@@ -46,20 +46,33 @@ def automl_eval_tables_model(
   import pathlib2
 
 
-  # import kfp
   from google.api_core.client_options import ClientOptions
   from google.api_core import exceptions
   from google.cloud import automl_v1beta1 as automl
   from google.cloud.automl_v1beta1 import enums
-  # from google.cloud import storage
+  from google.cloud import storage
 
 
-  # def copy_string_to_gcs(project, bucket_name, gcs_path, pstring):
-  #   logging.info('Using bucket {} and path {}'.format(bucket_name, gcs_path))
-  #   storage_client = storage.Client(project=project)
-  #   bucket = storage_client.get_bucket(bucket_name)
-  #   blob = bucket.blob(gcs_path)
-  #   blob.upload_from_string(pstring)
+  def upload_blob(bucket_name, source_file_name, destination_blob_name,
+      public_url=False):
+    """Uploads a file to the bucket."""
+    # bucket_name = "your-bucket-name"
+    # source_file_name = "local/path/to/file"
+    # destination_blob_name = "storage-object-name"
+
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name)
+
+    blob.upload_from_filename(source_file_name)
+
+    logging.info("File {} uploaded to {}.".format(
+            source_file_name, destination_blob_name))
+    if public_url:
+      blob.make_public()
+      logging.info("Blob {} is publicly accessible at {}".format(
+              blob.name, blob.public_url))
+    return blob.public_url
 
 
   def get_model_details(client, model_display_name):
@@ -107,6 +120,7 @@ def automl_eval_tables_model(
   def generate_fi_ui(feat_list):
     import matplotlib.pyplot as plt
 
+    image_suffix = 'arghh/testing/gfi.png'
     res = list(zip(*feat_list))
     x = list(res[0])
     y = list(res[1])
@@ -114,17 +128,26 @@ def automl_eval_tables_model(
     plt.barh(y_pos, x, alpha=0.5)
     plt.yticks(y_pos, y)
     plt.savefig('/gfi.png')
+    public_url = upload_blob(bucket_name, '/gfi.png', image_suffix, public_url=True)
+    logging.info('using image url {}'.format(public_url))
 
+    html_suffix = 'arghh/testing/gfi.html'
     with open('/gfi.html', 'w') as f:
-      f.write('<html><head></head><body><img src="/gfi.png" /></body></html>')
+      # f.write('<html><head></head><body><img src="https://storage.googleapis.com/aju-images/temp/gfi.png" /></body></html>')
+      f.write('<html><head></head><body><img src="{}" /></body></html>'.format(public_url))
+    upload_blob(bucket_name, '/gfi.html', html_suffix)
+    html_source = 'gs://{}/{}'.format(bucket_name, html_suffix)
+    logging.info('metadata html source: {}'.format(html_source))
 
     metadata = {
-      'outputs' : [{
+      'outputs' : [
+      {
         'type': 'web-app',
         'storage': 'gcs',
-        'source': "/gfi.html"
-      }]
-    }
+        # 'source': "gs://aju-vtests2-misc/gfi.html"
+        'source': html_source
+      }]}
+    logging.info('using metadata dict {}'.format(json.dumps(metadata)))
     with open('/mlpipeline-ui-metadata.json', 'w') as f:
       json.dump(metadata, f)
 
@@ -173,7 +196,8 @@ if __name__ == '__main__':
 # #   (eval_hex, features) = automl_eval_tables_model('aju-vtests2', 'us-central1', model_display_name='somodel_1579284627')
 #   (eval_hex, features) = automl_eval_tables_model('aju-vtests2', 'us-central1',
 #       bucket_name='aju-pipelines', model_display_name='bwmodel_1579017140',
-#       gcs_path='automl_evals/testing/somodel_1579284627', eval_data_path=None)
+#       # gcs_path='automl_evals/testing/somodel_1579284627',
+#       eval_data_path=None)
 # #   with open('temp_oput', "w") as f:
 # #     f.write(eval_hex)
 
