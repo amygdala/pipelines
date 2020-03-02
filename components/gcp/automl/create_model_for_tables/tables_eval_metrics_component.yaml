@@ -22,10 +22,10 @@ inputs:
   default: '0.5'
   optional: true
 outputs:
+- name: mlpipeline_ui_metadata
+  type: UI_metadata
 - name: deploy
   type: Boolean
-- name: MLPipeline UI metadata
-  type: UI metadata
 implementation:
   container:
     image: python:3.7
@@ -36,18 +36,25 @@ implementation:
     - "class InputPath:\n    '''When creating component from function, InputPath should\
       \ be used as function parameter annotation to tell the system to pass the *data\
       \ file path* to the function instead of passing the actual data.'''\n    def\
-      \ __init__(self, type=None):\n        self.type = type\n\nfrom typing import\
-      \ NamedTuple\n\ndef automl_eval_metrics(\n\tgcp_project_id: str,\n\tgcp_region:\
-      \ str,\n  model_display_name: str,\n  bucket_name: str,\n  # gcs_path: str,\n\
-      \  eval_data_path: InputPath('evals'),\n  api_endpoint: str = None,\n  # thresholds:\
-      \ str = '{\"au_prc\": 0.9}',\n  thresholds: str = '{\"mean_absolute_error\"\
-      : 450}',\n  confidence_threshold: float = 0.5  # for classification\n\n) ->\
-      \ NamedTuple('Outputs', [('deploy', bool)]):\n  import subprocess\n  import\
-      \ sys\n  subprocess.run([sys.executable, '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',\n\
-      \      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'},\
-      \ check=True)\n  subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',\n\
-      \     'google-cloud-storage',\n     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK':\
-      \ '1'}, check=True)\n\n  import google\n  import json\n  import logging\n  import\
+      \ __init__(self, type=None):\n        self.type = type\n\nclass OutputPath:\n\
+      \    '''When creating component from function, OutputPath should be used as\
+      \ function parameter annotation to tell the system that the function wants to\
+      \ output data by writing it into a file with the given path instead of returning\
+      \ the data from the function.'''\n    def __init__(self, type=None):\n     \
+      \   self.type = type\n\ndef _make_parent_dirs_and_return_path(file_path: str):\n\
+      \    import os\n    os.makedirs(os.path.dirname(file_path), exist_ok=True)\n\
+      \    return file_path\n\nfrom typing import NamedTuple\n\ndef automl_eval_metrics(\n\
+      \tgcp_project_id: str,\n\tgcp_region: str,\n  model_display_name: str,\n  bucket_name:\
+      \ str,\n  # gcs_path: str,\n  eval_data_path: InputPath('evals'),\n  mlpipeline_ui_metadata_path:\
+      \ OutputPath('UI_metadata'),\n  api_endpoint: str = None,\n  # thresholds: str\
+      \ = '{\"au_prc\": 0.9}',\n  thresholds: str = '{\"mean_absolute_error\": 450}',\n\
+      \  confidence_threshold: float = 0.5  # for classification\n\n) -> NamedTuple('Outputs',\
+      \ [('deploy', bool)]):\n  import subprocess\n  import sys\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'googleapis-common-protos==1.6.0',\n      '--no-warn-script-location'],\
+      \ env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)\n  subprocess.run([sys.executable,\
+      \ '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',\n     'google-cloud-storage',\n\
+      \     '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'},\
+      \ check=True)\n\n  import google\n  import json\n  import logging\n  import\
       \ pickle\n  from google.api_core.client_options import ClientOptions\n  from\
       \ google.api_core import exceptions\n  from google.cloud import automl_v1beta1\
       \ as automl\n  from google.cloud.automl_v1beta1 import enums\n  from google.cloud\
@@ -119,28 +126,33 @@ implementation:
       \       {\n            'storage': 'inline',\n            'source': '# Regression\
       \ metrics:\\n\\n```{}```\\n'.format(eresults),\n            'type': 'markdown',\n\
       \          }]}\n        logging.info('using metadata dict {}'.format(json.dumps(metadata)))\n\
-      \        with open('/mlpipeline-ui-metadata.json', 'w') as f:\n          json.dump(metadata,\
-      \ f)\n        logging.info('deploy flag: {}'.format(res))\n        # TODO: generate\
-      \ ui-metadata as appropriate\n        return res\n\n      elif classif and thresholds_dict:\n\
-      \        res, eresults = classif_threshold_check(eval_info)\n        # logging.info('eresults:\
-      \ {}'.format(eresults))\n        metadata = {\n          'outputs' : [\n   \
-      \       {\n            'storage': 'inline',\n            'source': '# classification\
-      \ metrics for confidence threshold {}:\\n\\n```{}```\\n'.format(\n         \
-      \       confidence_threshold, eresults),\n            'type': 'markdown',\n\
-      \          }]}\n        logging.info('using metadata dict {}'.format(json.dumps(metadata)))\n\
-      \        with open('/mlpipeline-ui-metadata.json', 'w') as f:\n          json.dump(metadata,\
-      \ f)\n        logging.info('deploy flag: {}'.format(res))\n        # TODO: generate\
-      \ confusion matrix ui-metadata as approp etc.\n        if binary_classif:\n\
-      \          generate_cm_metadata()\n        return res\n      else:\n       \
-      \ return True\n    except Exception as e:\n      logging.warning(e)\n      #\
-      \ If can't reconstruct the eval, or don't have thresholds defined,\n      #\
-      \ return True as a signal to deploy.\n      # TODO: is this the right default?\n\
-      \      return True\n\ndef _serialize_bool(bool_value: bool) -> str:\n    if\
-      \ isinstance(bool_value, str):\n        return bool_value\n    if not isinstance(bool_value,\
-      \ bool):\n        raise TypeError('Value \"{}\" has type \"{}\" instead of bool.'.format(str(bool_value),\
-      \ str(type(bool_value))))\n    return str(bool_value)\n\nimport argparse\n_parser\
-      \ = argparse.ArgumentParser(prog='Automl eval metrics', description='')\n_parser.add_argument(\"\
-      --gcp-project-id\", dest=\"gcp_project_id\", type=str, required=True, default=argparse.SUPPRESS)\n\
+      \        logging.info('using metadata ui path: {}'.format(mlpipeline_ui_metadata_path))\n\
+      \        with open(mlpipeline_ui_metadata_path, 'w') as mlpipeline_ui_metadata_file:\n\
+      \          mlpipeline_ui_metadata_file.write(json.dumps(metadata))\n       \
+      \ logging.info('deploy flag: {}'.format(res))\n        return res\n\n      elif\
+      \ classif and thresholds_dict:\n        res, eresults = classif_threshold_check(eval_info)\n\
+      \        # logging.info('eresults: {}'.format(eresults))\n        metadata =\
+      \ {\n          'outputs' : [\n          {\n            'storage': 'inline',\n\
+      \            'source': '# classification metrics for confidence threshold {}:\\\
+      n\\n```{}```\\n'.format(\n                confidence_threshold, eresults),\n\
+      \            'type': 'markdown',\n          }]}\n        logging.info('using\
+      \ metadata dict {}'.format(json.dumps(metadata)))\n        logging.info('using\
+      \ metadata ui path: {}'.format(mlpipeline_ui_metadata_path))\n        with open(mlpipeline_ui_metadata_path,\
+      \ 'w') as mlpipeline_ui_metadata_file:\n          mlpipeline_ui_metadata_file.write(json.dumps(metadata))\n\
+      \        # with open('/mlpipeline-ui-metadata.json', 'w') as f:\n          #\
+      \ json.dump(metadata, f)\n        logging.info('deploy flag: {}'.format(res))\n\
+      \        # TODO: generate confusion matrix ui-metadata as approp etc.\n    \
+      \    if binary_classif:\n          generate_cm_metadata()\n        return res\n\
+      \      else:\n        return True\n    except Exception as e:\n      logging.warning(e)\n\
+      \      # If can't reconstruct the eval, or don't have thresholds defined,\n\
+      \      # return True as a signal to deploy.\n      # TODO: is this the right\
+      \ default?\n      return True\n\ndef _serialize_bool(bool_value: bool) -> str:\n\
+      \    if isinstance(bool_value, str):\n        return bool_value\n    if not\
+      \ isinstance(bool_value, bool):\n        raise TypeError('Value \"{}\" has type\
+      \ \"{}\" instead of bool.'.format(str(bool_value), str(type(bool_value))))\n\
+      \    return str(bool_value)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog='Automl\
+      \ eval metrics', description='')\n_parser.add_argument(\"--gcp-project-id\"\
+      , dest=\"gcp_project_id\", type=str, required=True, default=argparse.SUPPRESS)\n\
       _parser.add_argument(\"--gcp-region\", dest=\"gcp_region\", type=str, required=True,\
       \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--model-display-name\"\
       , dest=\"model_display_name\", type=str, required=True, default=argparse.SUPPRESS)\n\
@@ -151,6 +163,8 @@ implementation:
       _parser.add_argument(\"--thresholds\", dest=\"thresholds\", type=str, required=False,\
       \ default=argparse.SUPPRESS)\n_parser.add_argument(\"--confidence-threshold\"\
       , dest=\"confidence_threshold\", type=float, required=False, default=argparse.SUPPRESS)\n\
+      _parser.add_argument(\"--mlpipeline-ui-metadata\", dest=\"mlpipeline_ui_metadata_path\"\
+      , type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)\n\
       _parser.add_argument(\"----output-paths\", dest=\"_output_paths\", type=str,\
       \ nargs=1)\n_parsed_args = vars(_parser.parse_args())\n_output_files = _parsed_args.pop(\"\
       _output_paths\", [])\n\n_outputs = automl_eval_metrics(**_parsed_args)\n\nif\
@@ -188,7 +202,7 @@ implementation:
         then:
         - --confidence-threshold
         - inputValue: confidence_threshold
+    - --mlpipeline-ui-metadata
+    - outputPath: mlpipeline_ui_metadata
     - '----output-paths'
     - outputPath: deploy
-    fileOutputs:
-      MLPipeline UI metadata: /mlpipeline-ui-metadata.json

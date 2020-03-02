@@ -25,6 +25,7 @@ def automl_eval_metrics(
   bucket_name: str,
   # gcs_path: str,
   eval_data_path: InputPath('evals'),
+  mlpipeline_ui_metadata_path: OutputPath('UI_metadata'),
   api_endpoint: str = None,
   # thresholds: str = '{"au_prc": 0.9}',
   thresholds: str = '{"mean_absolute_error": 450}',
@@ -142,29 +143,22 @@ def automl_eval_metrics(
           return (False, eresults)
     return (True, eresults)
 
-  def generate_cm_metadata():
-    pass
 
   # testing...
   with open(eval_data_path, 'rb') as f:
     logging.info('successfully opened eval_data_path {}'.format(eval_data_path))
     try:
       eval_info = pickle.loads(f.read())
-      # TODO: add handling of confusion matrix stuff for binary classif case..
-      # eval_string = get_string_from_gcs(gcp_project_id, bucket_name, gcs_path)
-      # eval_info = pickle.loads(eval_string)
 
       classif = False
-      binary_classif = False
       regression = False
-      # TODO: ughh... what's the right way to figure out the model type?
+      # TODO: what's the right way to figure out the model type?
       if eval_info[1].regression_evaluation_metrics and eval_info[1].regression_evaluation_metrics.root_mean_squared_error:
         regression=True
         logging.info('found regression metrics {}'.format(eval_info[1].regression_evaluation_metrics))
       elif eval_info[1].classification_evaluation_metrics and eval_info[1].classification_evaluation_metrics.au_prc:
         classif = True
         logging.info('found classification metrics {}'.format(eval_info[1].classification_evaluation_metrics))
-        # TODO: detect binary classification case
 
       if regression and thresholds_dict:
         res, eresults = regression_threshold_check(eval_info)
@@ -176,11 +170,13 @@ def automl_eval_metrics(
             'source': '# Regression metrics:\n\n```{}```\n'.format(eresults),
             'type': 'markdown',
           }]}
+        # TODO: is it possible to get confusion matrix info via the API, for the binary
+        # classifcation case? doesn't seem to be.
         logging.info('using metadata dict {}'.format(json.dumps(metadata)))
-        with open('/mlpipeline-ui-metadata.json', 'w') as f:
-          json.dump(metadata, f)
+        logging.info('using metadata ui path: {}'.format(mlpipeline_ui_metadata_path))
+        with open(mlpipeline_ui_metadata_path, 'w') as mlpipeline_ui_metadata_file:
+          mlpipeline_ui_metadata_file.write(json.dumps(metadata))
         logging.info('deploy flag: {}'.format(res))
-        # TODO: generate ui-metadata as appropriate
         return res
 
       elif classif and thresholds_dict:
@@ -195,12 +191,10 @@ def automl_eval_metrics(
             'type': 'markdown',
           }]}
         logging.info('using metadata dict {}'.format(json.dumps(metadata)))
-        with open('/mlpipeline-ui-metadata.json', 'w') as f:
-          json.dump(metadata, f)
+        logging.info('using metadata ui path: {}'.format(mlpipeline_ui_metadata_path))
+        with open(mlpipeline_ui_metadata_path, 'w') as mlpipeline_ui_metadata_file:
+          mlpipeline_ui_metadata_file.write(json.dumps(metadata))
         logging.info('deploy flag: {}'.format(res))
-        # TODO: generate confusion matrix ui-metadata as approp etc.
-        if binary_classif:
-          generate_cm_metadata()
         return res
       else:
         return True

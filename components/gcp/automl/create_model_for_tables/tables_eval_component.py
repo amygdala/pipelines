@@ -23,6 +23,7 @@ def automl_eval_tables_model(
   bucket_name: str,
   gcs_path: str,
   eval_data_path: OutputPath('evals'),
+  mlpipeline_ui_metadata_path: OutputPath('UI_metadata'),
   api_endpoint: str = None,
 
 ) -> NamedTuple('Outputs', [
@@ -34,7 +35,7 @@ def automl_eval_tables_model(
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
   subprocess.run([sys.executable, '-m', 'pip', 'install', 'google-cloud-automl==0.9.0',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
-  subprocess.run([sys.executable, '-m', 'pip', 'install',  # 'google-cloud-storage',
+  subprocess.run([sys.executable, '-m', 'pip', 'install',
      'matplotlib', 'pathlib2', 'google-cloud-storage',
      '--no-warn-script-location'], env={'PIP_DISABLE_PIP_VERSION_CHECK': '1'}, check=True)
 
@@ -97,6 +98,7 @@ def automl_eval_tables_model(
         feat_to_show = 10
 
     # Display the model information.
+    # TODO: skip this?
     logging.info("Model name: {}".format(model.name))
     logging.info("Model id: {}".format(model.name.split("/")[-1]))
     logging.info("Model display name: {}".format(model.display_name))
@@ -109,11 +111,9 @@ def automl_eval_tables_model(
     logging.info("Model deployment state: {}".format(deployment_state))
 
     generate_fi_ui(feat_list)
-
     return (model, feat_list)
 
-  # TODO: generate ui-metadata for global features importance.
-  # Try nbconvert-based viz?... though that doesn't seem to be automatable?
+
   def generate_fi_ui(feat_list):
     import matplotlib.pyplot as plt
 
@@ -143,8 +143,11 @@ def automl_eval_tables_model(
         'source': html_source
       }]}
     logging.info('using metadata dict {}'.format(json.dumps(metadata)))
-    with open('/mlpipeline-ui-metadata.json', 'w') as f:
-      json.dump(metadata, f)
+    # with open('/mlpipeline-ui-metadata.json', 'w') as f:
+      # json.dump(metadata, f)
+    logging.info('using metadata ui path: {}'.format(mlpipeline_ui_metadata_path))
+    with open(mlpipeline_ui_metadata_path, 'w') as mlpipeline_ui_metadata_file:
+      mlpipeline_ui_metadata_file.write(json.dumps(metadata))
 
 
   logging.getLogger().setLevel(logging.INFO)  # TODO: make level configurable
@@ -164,8 +167,6 @@ def automl_eval_tables_model(
   with open('temp_oput_regression', "w") as f:
     f.write('Model evals:\n{}'.format(evals))
   pstring = pickle.dumps(evals)
-  # pstring = pickled_eval.hex()
-  # copy_string_to_gcs(gcp_project_id, bucket_name, gcs_path, pstring)
 
   # write to eval_data_path
   if eval_data_path:

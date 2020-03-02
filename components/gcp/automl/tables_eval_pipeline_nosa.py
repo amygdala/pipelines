@@ -46,20 +46,20 @@ deploy_model_op = comp.load_component_from_file(
   description='Demonstrate an AutoML Tables workflow'
 )
 def automl_tables_test(  #pylint: disable=unused-argument
-  gcp_project_id: String = 'YOUR_PROJECT_HERE',
-  gcp_region: String = 'us-central1',
-  dataset_display_name: String = 'YOUR_DATASET_NAME',
-  api_endpoint: String = '',
-  path: String = 'bq://aju-dev-demos.london_bikes_weather.bikes_weather',
-  target_col_name: String = 'duration',
-  time_col_name: String = '',
-  # test_train_col_name: String = '',
+  gcp_project_id: str = 'YOUR_PROJECT_HERE',
+  gcp_region: str = 'us-central1',
+  dataset_display_name: str = 'YOUR_DATASET_NAME',
+  api_endpoint: str = '',
+  path: str = 'bq://aju-dev-demos.london_bikes_weather.bikes_weather',
+  target_col_name: str = 'duration',
+  time_col_name: str = '',
+  # test_train_col_name: str = '',
  # schema dict with col name as key, type as value
-  schema_info: String = DEFAULT_SCHEMA,
+  schema_info: str = DEFAULT_SCHEMA,
   train_budget_milli_node_hours: 'Integer' = 1000,
-  model_prefix: String = 'bwmodel',
-  model_display_name: String = 'bwmodel_1579017140',
-  bucket_name: String = 'aju-pipelines',
+  model_prefix: str = 'bwmodel',
+  model_display_name: str = 'bwmodel_1579017140',
+  bucket_name: str = 'aju-pipelines',
   thresholds: str = '{"au_prc": 0.9}',
 
   ):
